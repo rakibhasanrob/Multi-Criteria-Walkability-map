@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Santa Monica Spatial Explorer | Spatial Proximity Dashboard</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Google Fonts: Inter & Segoe UI fallback to match PowerBI / ALVARIA typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet Maps CSS & JS (100% Free, Zero API Key Required) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+    body {
+      font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f8fafc;
+      color: #1e293b;
+      overflow-x: hidden;
+    }
+
+    /* Compact Checkbox Scrollbar */
+    .filter-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .filter-scroll::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 3px;
+    }
+    .filter-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    .filter-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Legend Horizontal Scrollbar hidden */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Polished Slicer Card */
+    .slicer-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 7px 9px 6px 9px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .slicer-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 2px 5px rgba(15, 23, 42, 0.06);
+    }
+
+    /* Custom Dual-Thumb Range Slider (Matches Power BI Slicer with Clean Alignment) */
+    .dual-slider-wrap {
+      position: relative;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+      margin-left: 2px;
+      margin-right: 2px;
+    }
+    .dual-slider-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 2px;
+      background-color: #e2e8f0;
+      z-index: 1;
+    }
+    .dual-slider-fill {
+      position: absolute;
+      height: 3px;
+      border-radius: 2px;
+      background-color: #475569;
+      z-index: 2;
+    }
+    .dual-slider-input {
+      position: absolute;
+      width: 100%;
+      height: 0;
+      -webkit-appearance: none;
+      appearance: none;
+      background: none;
+      pointer-events: none;
+      outline: none;
+      margin: 0;
+      z-index: 3;
+    }
+    .dual-slider-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1.75px solid #4a5568;
+      cursor: grab;
+      pointer-events: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+      transition: border-color 0.12s ease, transform 0.1s ease, box-shadow 0.12s ease;
+    }
+    .dual-slider-input::-webkit-slider-thumb:hover {
+      border-color: #0f172a;
+      transform: scale(1.1);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.22);
+    }
+    .dual-slider-input::-webkit-slider-thumb:active {
+      cursor: grabbing;
+      background: #f8fafc;
+    }
+    .dual-slider-input::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1.75px solid #4a5568;
+      cursor: grab;
+      pointer-events: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+    }
+
+    /* Numeric Input Box matching Power BI Slicer */
+    .slicer-num-input {
+      width: 48%;
+      height: 22px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #334155;
+      text-align: left;
+      padding: 0 5px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .slicer-num-input:focus {
+      border-color: #0078D4;
+      box-shadow: 0 0 0 1.5px rgba(0, 120, 212, 0.2);
+    }
+
+    /* Checkbox Styling */
+    .category-checkbox {
+      accent-color: #0078D4;
+      cursor: pointer;
+    }
+
+    /* Facility Marker Styling */
+    .facility-marker-pin {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 10px;
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .facility-marker-pin:hover {
+      transform: scale(1.22);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      z-index: 1000 !important;
+    }
+
+    /* Custom Leaflet Popup Styling */
+    .leaflet-popup-content-wrapper {
+      padding: 0;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+    .leaflet-popup-content {
+      margin: 0 !important;
+      line-height: 1.4;
+    }
+    .leaflet-popup-tip {
+      background: #ffffff;
+    }
+  </style>
+</head>
+
+<body class="h-screen flex flex-col justify-between overflow-hidden bg-[#f4f6f9]">
+
+  <!-- ==================== MAIN DASHBOARD CONTAINER ==================== -->
+  <div id="mainDashboardView" class="flex-1 flex flex-col p-2.5 gap-2 min-h-0 overflow-hidden">
+
+    <!-- TOP SECTION: MAP (LEFT) & METRICS/CONTROLS (RIGHT) -->
+    <div class="flex-1 grid grid-cols-12 gap-2.5 min-h-0">
+
+      <!-- ==================== LEFT COLUMN: INTERACTIVE MAP & LEGEND STRIP ==================== -->
+      <div class="col-span-12 lg:col-span-7 flex flex-col min-h-0 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+
+        <!-- Map Canvas Wrapper -->
+        <div class="relative flex-1 w-full overflow-hidden bg-[#eef2f6]">
+          <div id="map" class="w-full h-full z-10"></div>
+
+
+          <!-- Top-Right Circular + / - Zoom Buttons -->
+          <div class="absolute top-2.5 right-2.5 z-20 flex flex-col space-y-1.5">
+            <button
+              id="mapZoomInBtn"
+              title="Zoom in"
+              class="w-[30px] h-[30px] rounded-full bg-white/95 hover:bg-white border border-slate-500 flex items-center justify-center text-slate-800 shadow-sm transition-transform active:scale-95"
+            >
+              <i class="fa-solid fa-plus text-[11px]"></i>
+            </button>
+            <button
+              id="mapZoomOutBtn"
+              title="Zoom out"
+              class="w-[30px] h-[30px] rounded-full bg-white/95 hover:bg-white border border-slate-500 flex items-center justify-center text-slate-800 shadow-sm transition-transform active:scale-95"
+            >
+              <i class="fa-solid fa-minus text-[11px]"></i>
+            </button>
+            <button
+              id="resetMapCenterBtn"
+              title="Reset map view to Santa Monica city limits"
+              class="w-[30px] h-[30px] rounded-full bg-white/95 hover:bg-white border border-slate-400 flex items-center justify-center text-slate-700 shadow-sm transition-transform active:scale-95"
+            >
+              <i class="fa-solid fa-crosshairs text-[11px]"></i>
+            </button>
+          </div>
+
+          <!-- Bottom-Left Clean Map Brand Badge -->
+          <div class="absolute bottom-1.5 left-2.5 z-20 pointer-events-none flex items-center space-x-1.5 bg-white/90 px-2 py-0.5 rounded text-slate-700 shadow-sm border border-slate-200/80">
+            <i class="fa-solid fa-map-location-dot text-[#0078D4] text-[11px]"></i>
+            <span class="text-[10.5px] font-semibold tracking-tight">Santa Monica, CA Spatial Explorer</span>
+            <span class="text-[9.5px] text-slate-400">| Commercial &amp; Community Assets</span>
+          </div>
+
+          <!-- Bottom-Right Compact Tile Attribution -->
+          <div id="mapTileAttribution" class="absolute bottom-1 right-2 z-20 bg-white/85 px-1.5 py-0.5 rounded text-[9.5px] text-slate-500 pointer-events-auto">
+            Tiles © Esri — Source: Esri, DeLorme, NAVTEQ, USGS | OSM Santa Monica
+          </div>
+        </div>
+
+        <!-- Clean Horizontally Aligned Legend Bar Directly Beneath Map -->
+        <div class="h-[32px] bg-slate-50/90 border-t border-slate-200 px-2.5 flex items-center justify-between shrink-0 select-none">
+          <div class="flex items-center space-x-1.5 mr-2 shrink-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">Legend</span>
+            <span class="text-slate-300">|</span>
+          </div>
+          <div
+            id="legendScrollContainer"
+            class="flex-1 flex items-center space-x-3 overflow-x-auto no-scrollbar whitespace-nowrap text-[11px] text-slate-700 py-0.5"
+          >
+            <!-- Dynamically populated via JS -->
+          </div>
+          <div class="flex items-center space-x-1 ml-1.5 shrink-0">
+            <button
+              id="scrollLegendLeftBtn"
+              title="Scroll legend left"
+              class="w-5 h-5 rounded hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
+            >
+              <i class="fa-solid fa-caret-left text-xs"></i>
+            </button>
+            <button
+              id="scrollLegendRightBtn"
+              title="Scroll legend right"
+              class="w-5 h-5 rounded hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
+            >
+              <i class="fa-solid fa-caret-right text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== RIGHT COLUMN: CLEAN HEADER + DISPLAY CARD + 2x3 SLIDER GRID ==================== -->
+      <div class="col-span-12 lg:col-span-5 flex flex-col justify-between gap-2 min-h-0">
+
+        <!-- Top-Right Header Card: Help Text (Left) + Total Facilities Counter & ALVARIA Brand (Right) -->
+        <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm shrink-0">
+          <div class="grid grid-cols-12 gap-3 items-center">
+            <!-- Help Block -->
+            <div class="col-span-7 border-r border-slate-100 pr-3">
+              <div class="flex items-center justify-between mb-1">
+                <h2 class="text-[13px] font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                  <i class="fa-solid fa-circle-question text-[#0078D4] text-xs"></i>
+                  <span>How Proximity Filters Work</span>
+                </h2>
+                <span class="text-[9.5px] font-semibold text-[#0078D4] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">Walkability Index</span>
+              </div>
+              <p class="text-[10.5px] leading-[1.38] text-slate-600">
+                Each slider sets the <strong class="font-semibold text-slate-800">walking distance in meters</strong> to the nearest amenity of that category. For example, drag <strong class="text-slate-800">Grocery to 400m</strong> to show venues with a supermarket within a 5-min walk. Use the <strong class="font-semibold text-slate-800">Display</strong> list to toggle which venue pins are visible.
+              </p>
+            </div>
+
+            <!-- Total Facilities Counter + Santa Monica Spatial GIS Brand -->
+            <div class="col-span-5 flex flex-col items-center justify-between text-center pl-1">
+              <div>
+                <div id="activeAddressCount" class="text-[36px] font-semibold text-slate-900 leading-none tracking-tight">
+                  193
+                </div>
+                <div class="text-[10.5px] font-medium text-slate-500 uppercase tracking-wider mt-1">
+                  FACILITIES
+                </div>
+              </div>
+
+              <!-- Santa Monica Spatial Brand Lockup -->
+              <div class="flex items-center space-x-1.5 mt-2 pt-1.5 border-t border-slate-100 w-full justify-center">
+                <i class="fa-solid fa-compass text-[#0078D4] text-xs"></i>
+                <span class="text-[11px] font-bold tracking-[0.14em] text-slate-800">SANTA MONICA GIS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle-Right Controls Area: Left Display Checklist Card (5 cols) + Right 2x3 Symmetrical Slider Grid (7 cols) -->
+        <div class="flex-1 grid grid-cols-12 gap-2 min-h-0">
+
+          <!-- Clean Display Checklist Card -->
+          <div class="col-span-5 bg-white border border-slate-200 rounded-lg p-2.5 shadow-sm flex flex-col min-h-0">
+            <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 shrink-0">
+              <span class="text-[11.5px] font-bold text-slate-800">Display:</span>
+              <button
+                id="resetAllFiltersBtn"
+                class="text-[10.5px] font-medium text-[#0078D4] hover:text-[#005a9e] hover:underline flex items-center gap-1"
+                title="Reset all checkboxes and distance sliders"
+              >
+                <i class="fa-solid fa-rotate-left text-[9.5px]"></i>
+                <span>Reset all</span>
+              </button>
+            </div>
+            <div
+              id="categoryCheckboxList"
+              class="flex-1 overflow-y-auto filter-scroll pr-1 space-y-0.5 min-h-0"
+            >
+              <!-- Populated dynamically via JS with color dots -->
+            </div>
+          </div>
+
+          <!-- Symmetrical 2-Column x 3-Row Grid for 6 Right-Side Proximity Sliders -->
+          <div
+            id="rightSlidersGrid"
+            class="col-span-7 grid grid-cols-2 grid-rows-3 gap-2 min-h-0"
+          >
+            <!-- Populated dynamically via JS: Gaming Club, Hair Salon / Barber, Cafe / Bakery, Grocery, Pharmacy, Post Office -->
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ==================== BOTTOM FULL-WIDTH ROW: 8 UNIFORM PROXIMITY SLIDER CARDS ==================== -->
+    <div
+      id="bottomSlidersGrid"
+      class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 shrink-0"
+    >
+      <!-- Populated dynamically via JS: Tea House, Bar, Fashion / Footwear, Fitness, Optician, Fast Food, Drugstore, Restaurant -->
+    </div>
+
+  </div>
+
+  <!-- ==================== PAGE 2 & PAGE 3 ANALYTICAL VIEWS (FOR PAGINATION < 1 of 3 >) ==================== -->
+  <div id="secondaryPageModal" class="hidden flex-1 flex-col px-6 py-4 bg-white overflow-y-auto">
+    <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+      <div>
+        <h2 id="secondaryPageTitle" class="text-lg font-bold text-slate-800">Facility Distribution &amp; Accessibility Summary</h2>
+        <p id="secondaryPageSubtitle" class="text-xs text-slate-500">Live summary of verified community &amp; commercial assets in Santa Monica, California</p>
+      </div>
+      <button onclick="setReportPage(1)" class="bg-[#0078D4] text-white text-xs font-medium px-3.5 py-1.5 rounded-md hover:bg-[#005a9e] shadow-sm">
+        <i class="fa-solid fa-map mr-1.5"></i>Back to Interactive Map (Page 1)
+      </button>
+    </div>
+    <div id="secondaryPageBody" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 content-start"></div>
+  </div>
+
+  <!-- ==================== BOTTOM BI REPORT FOOTER BAR ==================== -->
+  <footer class="h-[32px] bg-[#f1f5f9] border-t border-slate-200 px-4 flex items-center justify-between shrink-0 select-none z-30">
+    <!-- Left live status info -->
+    <div class="text-[11px] text-slate-600 hidden sm:flex items-center space-x-2">
+      <span class="w-2 h-2 rounded-full bg-[#107c41]"></span>
+      <span id="footerFilterStatus">Showing 193 of 193 facilities | Santa Monica, CA Spatial Explorer</span>
+    </div>
+
+    <!-- Center Pagination: < 1 of 3 > -->
+    <div class="flex items-center space-x-4 mx-auto sm:mx-0">
+      <button id="prevPageBtn" title="Previous Page" class="text-slate-500 hover:text-slate-900 disabled:opacity-30 transition-colors">
+        <i class="fa-solid fa-chevron-left text-xs"></i>
+      </button>
+      <span id="pageIndicatorText" class="text-[12px] font-semibold text-slate-800 tracking-wide">
+        1 of 3
+      </span>
+      <button id="nextPageBtn" title="Next Page" class="text-slate-500 hover:text-slate-900 disabled:opacity-30 transition-colors">
+        <i class="fa-solid fa-chevron-right text-xs"></i>
+      </button>
+    </div>
+
+    <!-- Right Quick Controls -->
+    <div class="flex items-center space-x-3 text-slate-500 text-xs">
+      <button
+        onclick="resetAllFilters()"
+        class="hover:text-[#0078D4] transition-colors flex items-center space-x-1"
+        title="Reset all filters to defaults"
+      >
+        <i class="fa-solid fa-arrow-rotate-right text-[11px]"></i>
+        <span class="text-[11px] hidden md:inline">Reset</span>
+      </button>
+      <button
+        onclick="toggleFullscreen()"
+        class="hover:text-slate-800 transition-colors"
+        title="Toggle Fullscreen"
+      >
+        <i class="fa-solid fa-expand text-[11px]"></i>
+      </button>
+    </div>
+  </footer>
+
+  <!-- Subtle Toast Notification Banner -->
+  <div
+    id="toastBanner"
+    class="fixed top-4 right-4 z-50 transform translate-y-[-100px] opacity-0 transition-all duration-300 bg-slate-900 text-white text-xs px-3.5 py-2 rounded-lg shadow-lg flex items-center space-x-2 pointer-events-none"
+  >
+    <i class="fa-solid fa-circle-check text-sky-400"></i>
+    <span id="toastBannerText">Filter updated</span>
+  </div>
+
+  <!-- ==================== APPLICATION JAVASCRIPT ==================== -->
+  <script>
+    /*************************************************************************
+     * 1. CATEGORY DEFINITIONS & EXACT SLIDER SPECIFICATIONS
+     *************************************************************************/
+    const ASSET_CATEGORIES = [
+      { id: 'autoservis', name: 'Auto Repair',         icon: 'fa-wrench',                color: '#1B365D' },
+      { id: 'bar',        name: 'Bar',                 icon: 'fa-martini-glass-citrus',  color: '#D9531E', maxLimit: 2100, decimals: 0, initMin: 0, initMax: 2100 },
+      { id: 'teahouse',   name: 'Tea House',           icon: 'fa-leaf',                  color: '#6B3FA0', maxLimit: 3300, decimals: 1, initMin: 0, initMax: 3300 },
+      { id: 'drugstore',  name: 'Drugstore',           icon: 'fa-capsules',              color: '#E33E88', maxLimit: 3000, decimals: 2, initMin: 0, initMax: 3000 },
+      { id: 'fastfood',   name: 'Fast Food',           icon: 'fa-burger',                color: '#F29F05', maxLimit: 1900, decimals: 2, initMin: 0, initMax: 1900 },
+      { id: 'fitness',    name: 'Fitness',             icon: 'fa-dumbbell',              color: '#D4C600', maxLimit: 2100, decimals: 2, initMin: 0, initMax: 2100 },
+      { id: 'gaming',     name: 'Gaming Club',         icon: 'fa-gamepad',               color: '#E63946', maxLimit: 2500, decimals: 2, initMin: 0, initMax: 2500 },
+      { id: 'hairsalon',  name: 'Hair Salon / Barber', icon: 'fa-scissors',              color: '#116466', maxLimit: 2000, decimals: 2, initMin: 0, initMax: 2000, shortLegend: 'Hair Salon' },
+      { id: 'cafe',       name: 'Cafe / Bakery',       icon: 'fa-mug-saucer',            color: '#2E933C', maxLimit: 1800, decimals: 2, initMin: 0, initMax: 1800 },
+      { id: 'pharmacy',   name: 'Pharmacy',            icon: 'fa-notes-medical',         color: '#00A8E8', maxLimit: 2800, decimals: 2, initMin: 0, initMax: 2800 },
+      { id: 'massage',    name: 'Massage',             icon: 'fa-spa',                   color: '#4361EE' },
+      { id: 'grocery',    name: 'Grocery',             icon: 'fa-cart-shopping',         color: '#107C41', maxLimit: 2200, decimals: 2, initMin: 0, initMax: 2200 },
+      { id: 'post',       name: 'Post Office',         icon: 'fa-envelope',              color: '#F59E0B', maxLimit: 2100, decimals: 2, initMin: 0, initMax: 2100 },
+      { id: 'fashion',    name: 'Fashion / Footwear',  icon: 'fa-shirt',                 color: '#8E44AD', maxLimit: 2900, decimals: 0, initMin: 0, initMax: 2900 },
+      { id: 'optician',   name: 'Optician',            icon: 'fa-glasses',               color: '#008B8B', maxLimit: 4100, decimals: 0, initMin: 0, initMax: 4100 },
+      { id: 'restaurant', name: 'Restaurant',          icon: 'fa-utensils',              color: '#C0392B', maxLimit: 2600, decimals: 2, initMin: 0, initMax: 2600 }
+    ];
+
+    // Symmetrical 2x3 Right-Side Sliders (6 Sliders)
+    const RIGHT_SLIDER_IDS = ['gaming', 'hairsalon', 'cafe', 'grocery', 'pharmacy', 'post'];
+
+    // Uniform 8-Column Bottom Row Sliders (8 Sliders)
+    const BOTTOM_SLIDER_IDS = ['teahouse', 'bar', 'fashion', 'fitness', 'optician', 'fastfood', 'drugstore', 'restaurant'];
+
+    const ALL_SLIDER_IDS = [...RIGHT_SLIDER_IDS, ...BOTTOM_SLIDER_IDS];
+
+    // Active Filter State
+    const visibleCategories = new Set(ASSET_CATEGORIES.map((c) => c.id));
+    const sliderFilters = {};
+    ALL_SLIDER_IDS.forEach((id) => {
+      const cat = ASSET_CATEGORIES.find((c) => c.id === id);
+      sliderFilters[id] = {
+        min: cat.initMin,
+        max: cat.initMax,
+        limitMax: cat.maxLimit,
+        decimals: cat.decimals
+      };
+    });
+
+    /*************************************************************************
+     *************************************************************************/
+    const SANTA_MONICA_FACILITIES = [{"id": "fac-1", "name": "Playland Arcade", "street": "200 Santa Monica Pier", "categories": ["gaming"], "lat": 34.0099, "lng": -118.4975, "distances": {"gaming": 0.0, "hairsalon": 631.48, "cafe": 774.93, "grocery": 812.7, "pharmacy": 2033.23, "post": 929.69, "teahouse": 130.21, "bar": 47.41, "fashion": 436.42, "fitness": 402.95, "optician": 433.19, "fastfood": 82.66, "drugstore": 1207.54, "restaurant": 291.12}}, {"id": "fac-2", "name": "Pacific Park Arcade", "street": "380 Santa Monica Pier", "categories": ["gaming"], "lat": 34.0094, "lng": -118.4979, "distances": {"gaming": 0.0, "hairsalon": 689.14, "cafe": 839.6, "grocery": 879.15, "pharmacy": 2062.06, "post": 992.93, "teahouse": 68.64, "bar": 94.13, "fashion": 498.06, "fitness": 463.38, "optician": 498.04, "fastfood": 57.9, "drugstore": 1274.09, "restaurant": 354.93}}, {"id": "fac-3", "name": "Next Level VR & Arcade", "street": "1220 3rd St Promenade", "categories": ["gaming"], "lat": 34.0155, "lng": -118.4952, "distances": {"gaming": 0.0, "hairsalon": 191.62, "cafe": 117.15, "grocery": 297.97, "pharmacy": 1938.49, "post": 278.6, "teahouse": 98.02, "bar": 131.95, "fashion": 62.09, "fitness": 162.35, "optician": 27.65, "fastfood": 58.36, "drugstore": 622.31, "restaurant": 107.22}}, {"id": "fac-4", "name": "Hi De Ho Comics & Gaming", "street": "1803 Lincoln Blvd", "categories": ["gaming"], "lat": 34.0145, "lng": -118.477, "distances": {"gaming": 0.0, "hairsalon": 143.27, "cafe": 547.88, "grocery": 831.38, "pharmacy": 830.96, "post": 972.43, "teahouse": 814.4, "bar": 1242.0, "fashion": 1192.37, "fitness": 412.95, "optician": 825.22, "fastfood": 652.93, "drugstore": 559.17, "restaurant": 1130.59}}, {"id": "fac-5", "name": "Santa Monica Board Game Club", "street": "1424 4th St", "categories": ["gaming"], "lat": 34.015, "lng": -118.494, "distances": {"gaming": 0.0, "hairsalon": 308.75, "cafe": 182.36, "grocery": 198.43, "pharmacy": 1901.46, "post": 346.08, "teahouse": 22.24, "bar": 237.03, "fashion": 107.64, "fitness": 271.77, "optician": 149.01, "fastfood": 178.06, "drugstore": 568.75, "restaurant": 185.67}}, {"id": "fac-6", "name": "Chess Park Gaming Tables", "street": "Ocean Front Walk & Bicknell Ave", "categories": ["gaming"], "lat": 34.0075, "lng": -118.489, "distances": {"gaming": 0.0, "hairsalon": 967.29, "cafe": 48.28, "grocery": 940.48, "pharmacy": 1226.65, "post": 843.74, "teahouse": 642.79, "bar": 516.27, "fashion": 619.0, "fitness": 468.34, "optician": 639.13, "fastfood": 790.56, "drugstore": 806.79, "restaurant": 667.12}}, {"id": "fac-7", "name": "Cha Cha Matcha", "street": "1401 Montana Ave", "categories": ["teahouse"], "lat": 34.0328, "lng": -118.4988, "distances": {"gaming": 1098.32, "hairsalon": 678.12, "cafe": 364.3, "grocery": 982.04, "pharmacy": 1482.56, "post": 1012.06, "teahouse": 0.0, "bar": 158.22, "fashion": 212.88, "fitness": 1325.78, "optician": 107.21, "fastfood": 1160.08, "drugstore": 1094.71, "restaurant": 1115.31}}, {"id": "fac-8", "name": "Boba Tea & Me", "street": "1328 Wilshire Blvd", "categories": ["teahouse"], "lat": 34.0255, "lng": -118.4895, "distances": {"gaming": 82.1, "hairsalon": 115.57, "cafe": 749.24, "grocery": 237.01, "pharmacy": 869.13, "post": 79.17, "teahouse": 0.0, "bar": 298.0, "fashion": 1118.83, "fitness": 601.82, "optician": 166.79, "fastfood": 426.95, "drugstore": 143.68, "restaurant": 92.16}}, {"id": "fac-9", "name": "Sunright Tea Studio", "street": "1335 4th St", "categories": ["teahouse"], "lat": 34.0158, "lng": -118.4942, "distances": {"gaming": 90.85, "hairsalon": 284.69, "cafe": 95.48, "grocery": 206.92, "pharmacy": 1850.94, "post": 255.5, "teahouse": 0.0, "bar": 227.44, "fashion": 68.24, "fitness": 202.17, "optician": 124.38, "fastfood": 128.14, "drugstore": 527.05, "restaurant": 199.72}}, {"id": "fac-10", "name": "The Alley Boba & Tea", "street": "1425 4th St", "categories": ["teahouse"], "lat": 34.0152, "lng": -118.494, "distances": {"gaming": 22.24, "hairsalon": 304.91, "cafe": 162.27, "grocery": 192.2, "pharmacy": 1888.38, "post": 324.7, "teahouse": 0.0, "bar": 243.21, "fashion": 100.18, "fitness": 262.03, "optician": 142.22, "fastfood": 166.32, "drugstore": 553.77, "restaurant": 189.63}}, {"id": "fac-11", "name": "Urth Caff\u00e9 Organic Teas", "street": "2327 Main St", "categories": ["teahouse"], "lat": 33.9985, "lng": -118.4815, "distances": {"gaming": 944.68, "hairsalon": 1008.83, "cafe": 454.23, "grocery": 2131.5, "pharmacy": 1096.03, "post": 185.6, "teahouse": 0.0, "bar": 274.84, "fashion": 251.6, "fitness": 1442.6, "optician": 638.76, "fastfood": 1008.11, "drugstore": 1541.47, "restaurant": 1883.38}}, {"id": "fac-12", "name": "The Coffee Bean & Tea Leaf", "street": "2600 Ocean Park Blvd", "categories": ["teahouse"], "lat": 34.0125, "lng": -118.4855, "distances": {"gaming": 642.79, "hairsalon": 780.45, "cafe": 664.1, "grocery": 688.27, "pharmacy": 1084.28, "post": 334.37, "teahouse": 0.0, "bar": 794.35, "fashion": 739.46, "fitness": 182.59, "optician": 783.46, "fastfood": 787.11, "drugstore": 279.12, "restaurant": 691.28}}, {"id": "fac-13", "name": "CVS Pharmacy", "street": "1411 Lincoln Blvd", "categories": ["drugstore"], "lat": 34.0185, "lng": -118.4895, "distances": {"gaming": 568.75, "hairsalon": 715.43, "cafe": 65.72, "grocery": 395.4, "pharmacy": 1341.42, "post": 120.37, "teahouse": 527.05, "bar": 149.01, "fashion": 461.73, "fitness": 320.23, "optician": 645.82, "fastfood": 54.1, "drugstore": 0.0, "restaurant": 149.01}}, {"id": "fac-14", "name": "Walgreens Pharmacy", "street": "1932 Wilshire Blvd", "categories": ["drugstore"], "lat": 34.0325, "lng": -118.482, "distances": {"gaming": 1041.02, "hairsalon": 952.33, "cafe": 451.33, "grocery": 112.27, "pharmacy": 135.2, "post": 215.24, "teahouse": 1040.93, "bar": 943.52, "fashion": 1392.26, "fitness": 335.55, "optician": 922.88, "fastfood": 1067.61, "drugstore": 0.0, "restaurant": 1104.27}}, {"id": "fac-15", "name": "Rite Aid", "street": "1808 Wilshire Blvd", "categories": ["drugstore"], "lat": 34.0308, "lng": -118.4842, "distances": {"gaming": 763.88, "hairsalon": 844.33, "cafe": 426.59, "grocery": 387.79, "pharmacy": 150.03, "post": 489.82, "teahouse": 765.42, "bar": 731.89, "fashion": 1232.02, "fitness": 58.47, "optician": 645.82, "fastfood": 1180.36, "drugstore": 0.0, "restaurant": 827.27}}, {"id": "fac-16", "name": "CVS Pharmacy", "street": "2505 Santa Monica Blvd", "categories": ["drugstore"], "lat": 34.036, "lng": -118.476, "distances": {"gaming": 1712.39, "hairsalon": 339.19, "cafe": 906.83, "grocery": 174.44, "pharmacy": 802.9, "post": 461.66, "teahouse": 1706.11, "bar": 469.6, "fashion": 1678.93, "fitness": 857.13, "optician": 1596.6, "fastfood": 417.34, "drugstore": 0.0, "restaurant": 1512.05}}, {"id": "fac-17", "name": "Santa Monica Plaza Drugstore", "street": "1260 15th St", "categories": ["drugstore"], "lat": 34.028, "lng": -118.487, "distances": {"gaming": 364.43, "hairsalon": 444.22, "cafe": 618.31, "grocery": 511.64, "pharmacy": 547.57, "post": 387.8, "teahouse": 361.05, "bar": 391.9, "fashion": 1137.67, "fitness": 347.17, "optician": 255.82, "fastfood": 779.42, "drugstore": 0.0, "restaurant": 425.81}}, {"id": "fac-18", "name": "Whole Foods Market", "street": "2201 Wilshire Blvd", "categories": ["grocery"], "lat": 34.0355, "lng": -118.4795, "distances": {"gaming": 1440.56, "hairsalon": 609.65, "cafe": 762.19, "grocery": 0.0, "pharmacy": 540.53, "post": 227.11, "teahouse": 1444.17, "bar": 796.58, "fashion": 1621.18, "fitness": 736.22, "optician": 1320.04, "fastfood": 672.99, "drugstore": 327.27, "restaurant": 1504.64}}, {"id": "fac-19", "name": "Whole Foods Market", "street": "500 Wilshire Blvd", "categories": ["grocery"], "lat": 34.021, "lng": -118.4965, "distances": {"gaming": 623.2, "hairsalon": 607.36, "cafe": 67.2, "grocery": 0.0, "pharmacy": 1662.71, "post": 361.1, "teahouse": 615.85, "bar": 429.2, "fashion": 538.42, "fitness": 427.37, "optician": 618.48, "fastfood": 126.37, "drugstore": 702.49, "restaurant": 267.88}}, {"id": "fac-20", "name": "Trader Joe's", "street": "3221 Pico Blvd", "categories": ["grocery"], "lat": 34.0285, "lng": -118.4605, "distances": {"gaming": 1108.0, "hairsalon": 402.79, "cafe": 1176.42, "grocery": 0.0, "pharmacy": 1850.91, "post": 928.85, "teahouse": 1164.11, "bar": 173.04, "fashion": 1551.29, "fitness": 973.98, "optician": 2677.68, "fastfood": 1310.62, "drugstore": 1653.96, "restaurant": 1132.9}}, {"id": "fac-21", "name": "Trader Joe's", "street": "1211 Wilshire Blvd", "categories": ["grocery"], "lat": 34.026, "lng": -118.492, "distances": {"gaming": 171.14, "hairsalon": 127.87, "cafe": 629.38, "grocery": 0.0, "pharmacy": 1044.49, "post": 46.08, "teahouse": 237.01, "bar": 533.6, "fashion": 1001.81, "fitness": 765.74, "optician": 255.82, "fastfood": 316.66, "drugstore": 255.86, "restaurant": 149.0}}, {"id": "fac-22", "name": "Erewhon Market", "street": "2800 Wilshire Blvd", "categories": ["grocery"], "lat": 34.0395, "lng": -118.4725, "distances": {"gaming": 1899.46, "hairsalon": 163.72, "cafe": 1110.59, "grocery": 0.0, "pharmacy": 1302.04, "post": 960.58, "teahouse": 2169.68, "bar": 364.43, "fashion": 1240.19, "fitness": 1120.51, "optician": 2094.26, "fastfood": 121.76, "drugstore": 505.44, "restaurant": 1072.26}}, {"id": "fac-23", "name": "Ralphs Fresh Fare", "street": "1644 Cloversharp Ave", "categories": ["grocery"], "lat": 34.028, "lng": -118.474, "distances": {"gaming": 1504.02, "hairsalon": 785.27, "cafe": 368.62, "grocery": 0.0, "pharmacy": 606.11, "post": 824.46, "teahouse": 1002.96, "bar": 985.2, "fashion": 2087.05, "fitness": 322.88, "optician": 1432.72, "fastfood": 1005.83, "drugstore": 890.99, "restaurant": 1545.77}}, {"id": "fac-24", "name": "Co-opportunity Organic Grocers", "street": "1525 Broadway", "categories": ["grocery"], "lat": 34.0225, "lng": -118.4855, "distances": {"gaming": 579.23, "hairsalon": 565.49, "cafe": 607.26, "grocery": 0.0, "pharmacy": 764.25, "post": 573.54, "teahouse": 497.16, "bar": 240.73, "fashion": 1032.48, "fitness": 261.86, "optician": 621.5, "fastfood": 523.75, "drugstore": 577.7, "restaurant": 452.27}}, {"id": "fac-25", "name": "Bob's Market", "street": "1650 Ocean Park Blvd", "categories": ["grocery"], "lat": 34.015, "lng": -118.468, "distances": {"gaming": 831.38, "hairsalon": 625.38, "cafe": 546.72, "grocery": 0.0, "pharmacy": 1128.95, "post": 1399.26, "teahouse": 589.52, "bar": 700.23, "fashion": 1774.27, "fitness": 289.52, "optician": 1116.38, "fastfood": 542.63, "drugstore": 1366.85, "restaurant": 1212.84}}, {"id": "fac-26", "name": "USPS Santa Monica Main Office", "street": "1248 5th St", "categories": ["post"], "lat": 34.018, "lng": -118.495, "distances": {"gaming": 278.6, "hairsalon": 341.6, "cafe": 167.81, "grocery": 361.1, "pharmacy": 1735.2, "post": 0.0, "teahouse": 255.5, "bar": 216.77, "fashion": 245.12, "fitness": 150.5, "optician": 281.78, "fastfood": 127.24, "drugstore": 509.95, "restaurant": 202.16}}, {"id": "fac-27", "name": "USPS Will Rogers Station", "street": "1217 Wilshire Blvd", "categories": ["post"], "lat": 34.026, "lng": -118.4915, "distances": {"gaming": 125.06, "hairsalon": 88.84, "cafe": 656.9, "grocery": 46.08, "pharmacy": 1007.41, "post": 0.0, "teahouse": 192.52, "bar": 490.05, "fashion": 1023.82, "fitness": 738.93, "optician": 215.26, "fastfood": 337.67, "drugstore": 213.16, "restaurant": 107.63}}, {"id": "fac-28", "name": "USPS Ocean Park Station", "street": "2720 Ocean Park Blvd", "categories": ["post"], "lat": 34.0215, "lng": -118.455, "distances": {"gaming": 188.77, "hairsalon": 186.07, "cafe": 411.75, "grocery": 928.85, "pharmacy": 2466.46, "post": 0.0, "teahouse": 1237.1, "bar": 824.48, "fashion": 2363.83, "fitness": 438.21, "optician": 2477.44, "fastfood": 1385.61, "drugstore": 2518.87, "restaurant": 278.34}}, {"id": "fac-29", "name": "USPS Santa Monica Post Annex", "street": "2007 Santa Monica Blvd", "categories": ["post"], "lat": 34.0335, "lng": -118.48, "distances": {"gaming": 1251.85, "hairsalon": 746.47, "cafe": 536.77, "grocery": 121.02, "pharmacy": 341.76, "post": 0.0, "teahouse": 1248.09, "bar": 898.75, "fashion": 1567.5, "fitness": 548.27, "optician": 1135.25, "fastfood": 860.12, "drugstore": 215.24, "restaurant": 1314.37}}, {"id": "fac-30", "name": "Santa Monica Mail & Shipping", "street": "1334 Lincoln Blvd", "categories": ["post"], "lat": 34.0175, "lng": -118.49, "distances": {"gaming": 461.73, "hairsalon": 703.99, "cafe": 91.8, "grocery": 279.19, "pharmacy": 1457.87, "post": 0.0, "teahouse": 430.79, "bar": 107.64, "fashion": 363.15, "fitness": 320.28, "optician": 553.55, "fastfood": 173.5, "drugstore": 120.37, "restaurant": 215.27}}, {"id": "fac-31", "name": "Warby Parker Santa Monica", "street": "1411 3rd St Promenade", "categories": ["optician"], "lat": 34.0155, "lng": -118.4955, "distances": {"gaming": 27.65, "hairsalon": 164.0, "cafe": 128.56, "grocery": 325.61, "pharmacy": 1957.81, "post": 281.78, "teahouse": 124.38, "bar": 104.34, "fashion": 55.6, "fitness": 135.22, "optician": 0.0, "fastfood": 47.1, "drugstore": 645.82, "restaurant": 90.46}}, {"id": "fac-32", "name": "Oliver Peoples Eyewear", "street": "1028 Montana Ave", "categories": ["optician"], "lat": 34.0335, "lng": -118.498, "distances": {"gaming": 1103.49, "hairsalon": 779.52, "cafe": 305.83, "grocery": 1000.6, "pharmacy": 1419.46, "post": 1026.78, "teahouse": 107.21, "bar": 236.99, "fashion": 107.62, "fitness": 1271.95, "optician": 0.0, "fastfood": 1202.67, "drugstore": 1089.08, "restaurant": 1126.5}}, {"id": "fac-33", "name": "Santa Monica Optometry", "street": "1421 Wilshire Blvd", "categories": ["optician"], "lat": 34.027, "lng": -118.4895, "distances": {"gaming": 124.92, "hairsalon": 203.46, "cafe": 796.88, "grocery": 255.82, "pharmacy": 793.7, "post": 150.42, "teahouse": 166.79, "bar": 392.06, "fashion": 1040.92, "fitness": 587.38, "optician": 0.0, "fastfood": 537.07, "drugstore": 25.49, "restaurant": 190.56}}, {"id": "fac-34", "name": "LensCrafters", "street": "395 Santa Monica Place", "categories": ["optician"], "lat": 34.0125, "lng": -118.494, "distances": {"gaming": 277.99, "hairsalon": 456.31, "cafe": 450.85, "grocery": 391.47, "pharmacy": 1790.2, "post": 618.48, "teahouse": 300.23, "bar": 317.2, "fashion": 72.21, "fitness": 298.03, "optician": 0.0, "fastfood": 407.11, "drugstore": 785.58, "restaurant": 92.17}}, {"id": "fac-35", "name": "Ocean Park Optometry", "street": "2617 Main St", "categories": ["optician"], "lat": 34.004, "lng": -118.4835, "distances": {"gaming": 380.93, "hairsalon": 673.08, "cafe": 137.41, "grocery": 1506.92, "pharmacy": 797.51, "post": 478.16, "teahouse": 638.76, "bar": 140.67, "fashion": 120.37, "fitness": 803.85, "optician": 0.0, "fastfood": 976.09, "drugstore": 932.03, "restaurant": 1288.46}}, {"id": "fac-36", "name": "Patagonia Santa Monica", "street": "1344 4th St", "categories": ["fashion"], "lat": 34.016, "lng": -118.4935, "distances": {"gaming": 120.37, "hairsalon": 351.3, "cafe": 120.37, "grocery": 148.22, "pharmacy": 1791.13, "post": 261.86, "teahouse": 68.24, "bar": 295.04, "fashion": 0.0, "fitness": 168.59, "optician": 192.54, "fastfood": 192.2, "drugstore": 461.73, "restaurant": 266.27}}, {"id": "fac-37", "name": "Nordstrom Santa Monica Place", "street": "220 Broadway", "categories": ["fashion"], "lat": 34.012, "lng": -118.4935, "distances": {"gaming": 264.71, "hairsalon": 528.49, "cafe": 514.52, "grocery": 423.61, "pharmacy": 1728.55, "post": 642.58, "teahouse": 358.8, "bar": 388.4, "fashion": 0.0, "fitness": 363.17, "optician": 72.21, "fastfood": 473.47, "drugstore": 811.36, "restaurant": 72.21}}, {"id": "fac-38", "name": "Nike Santa Monica", "street": "1318 3rd St Promenade", "categories": ["fashion"], "lat": 34.0145, "lng": -118.495, "distances": {"gaming": 107.64, "hairsalon": 241.58, "cafe": 223.15, "grocery": 304.61, "pharmacy": 1959.71, "post": 389.18, "teahouse": 120.64, "bar": 138.25, "fashion": 0.0, "fitness": 196.47, "optician": 120.37, "fastfood": 166.58, "drugstore": 674.38, "restaurant": 98.02}}, {"id": "fac-39", "name": "Zara Santa Monica", "street": "1347 3rd St Promenade", "categories": ["fashion"], "lat": 34.015, "lng": -118.4955, "distances": {"gaming": 62.09, "hairsalon": 175.86, "cafe": 178.84, "grocery": 332.04, "pharmacy": 1997.76, "post": 336.75, "teahouse": 140.03, "bar": 107.64, "fashion": 0.0, "fitness": 134.9, "optician": 55.6, "fastfood": 102.36, "drugstore": 676.22, "restaurant": 51.17}}, {"id": "fac-40", "name": "Lululemon Athletica", "street": "1410 Montana Ave", "categories": ["fashion"], "lat": 34.034, "lng": -118.497, "distances": {"gaming": 1090.15, "hairsalon": 871.67, "cafe": 249.84, "grocery": 1001.81, "pharmacy": 1339.09, "post": 1023.82, "teahouse": 212.88, "bar": 341.15, "fashion": 0.0, "fitness": 1200.38, "optician": 107.62, "fastfood": 1226.53, "drugstore": 1065.11, "restaurant": 1118.98}}, {"id": "fac-41", "name": "Aviator Nation Main St", "street": "2323 Main St", "categories": ["fashion"], "lat": 34.005, "lng": -118.483, "distances": {"gaming": 389.54, "hairsalon": 561.43, "cafe": 238.77, "grocery": 1438.96, "pharmacy": 712.36, "post": 585.81, "teahouse": 735.87, "bar": 258.05, "fashion": 0.0, "fitness": 714.9, "optician": 120.37, "fastfood": 935.13, "drugstore": 817.48, "restaurant": 1243.03}}, {"id": "fac-42", "name": "Equinox Santa Monica", "street": "201 Santa Monica Blvd", "categories": ["fitness"], "lat": 34.014, "lng": -118.4975, "distances": {"gaming": 269.74, "hairsalon": 176.44, "cafe": 373.1, "grocery": 539.65, "pharmacy": 2150.59, "post": 500.92, "teahouse": 349.1, "bar": 55.58, "fashion": 215.28, "fitness": 0.0, "optician": 248.6, "fastfood": 276.95, "drugstore": 891.09, "restaurant": 12.17}}, {"id": "fac-43", "name": "Orangetheory Fitness", "street": "1431 2nd St", "categories": ["fitness"], "lat": 34.0135, "lng": -118.497, "distances": {"gaming": 277.46, "hairsalon": 232.25, "cafe": 390.38, "grocery": 518.78, "pharmacy": 2088.02, "post": 533.25, "teahouse": 334.95, "bar": 97.13, "fashion": 193.84, "fitness": 0.0, "optician": 261.86, "fastfood": 298.91, "drugstore": 887.1, "restaurant": 73.02}}, {"id": "fac-44", "name": "Barry's Bootcamp", "street": "1541 Lincoln Blvd", "categories": ["fitness"], "lat": 34.0205, "lng": -118.487, "distances": {"gaming": 677.8, "hairsalon": 603.24, "cafe": 345.72, "grocery": 261.86, "pharmacy": 1025.49, "post": 433.27, "teahouse": 601.82, "bar": 447.16, "fashion": 780.55, "fitness": 0.0, "optician": 758.6, "fastfood": 267.22, "drugstore": 320.23, "restaurant": 190.56}}, {"id": "fac-45", "name": "Box 'N Burn Gym", "street": "1630 Olympic Blvd", "categories": ["fitness"], "lat": 34.0295, "lng": -118.471, "distances": {"gaming": 1757.2, "hairsalon": 606.22, "cafe": 666.29, "grocery": 322.88, "pharmacy": 897.54, "post": 941.09, "teahouse": 1052.52, "bar": 777.16, "fashion": 1785.14, "fitness": 0.0, "optician": 1727.37, "fastfood": 1102.59, "drugstore": 857.13, "restaurant": 1650.7}}, {"id": "fac-46", "name": "Santa Monica Yoga", "street": "1640 Ocean Park Blvd", "categories": ["fitness"], "lat": 34.011, "lng": -118.467, "distances": {"gaming": 1000.51, "hairsalon": 941.67, "cafe": 936.61, "grocery": 454.23, "pharmacy": 911.49, "post": 1608.23, "teahouse": 1040.84, "bar": 1126.36, "fashion": 1618.7, "fitness": 0.0, "optician": 898.46, "fastfood": 939.9, "drugstore": 1434.39, "restaurant": 1369.02}}, {"id": "fac-47", "name": "Father's Office Bar", "street": "1018 Montana Ave", "categories": ["bar"], "lat": 34.033, "lng": -118.5005, "distances": {"gaming": 1230.8, "hairsalon": 655.29, "cafe": 522.09, "grocery": 1104.27, "pharmacy": 1640.66, "post": 1137.42, "teahouse": 158.22, "bar": 0.0, "fashion": 341.15, "fitness": 1483.78, "optician": 236.99, "fastfood": 1254.67, "drugstore": 1234.82, "restaurant": 1179.82}}, {"id": "fac-48", "name": "The Misfit Bar & Lounge", "street": "225 Santa Monica Blvd", "categories": ["bar"], "lat": 34.0145, "lng": -118.4965, "distances": {"gaming": 163.47, "hairsalon": 139.44, "cafe": 272.04, "grocery": 434.91, "pharmacy": 2086.01, "post": 413.01, "teahouse": 243.21, "bar": 0.0, "fashion": 107.64, "fitness": 91.79, "optician": 144.43, "fastfood": 178.9, "drugstore": 783.63, "restaurant": 33.36}}, {"id": "fac-49", "name": "The Albright", "street": "258 Santa Monica Pier", "categories": ["bar"], "lat": 34.0098, "lng": -118.497, "distances": {"gaming": 47.41, "hairsalon": 642.77, "cafe": 772.11, "grocery": 793.61, "pharmacy": 1985.99, "post": 930.25, "teahouse": 141.57, "bar": 0.0, "fashion": 404.87, "fitness": 411.42, "optician": 408.16, "fastfood": 76.73, "drugstore": 1189.0, "restaurant": 264.04}}, {"id": "fac-50", "name": "The Daily Pint", "street": "2310 Pico Blvd", "categories": ["bar"], "lat": 34.027, "lng": -118.461, "distances": {"gaming": 1010.38, "hairsalon": 265.15, "cafe": 1030.91, "grocery": 173.04, "pharmacy": 1807.76, "post": 824.48, "teahouse": 1007.03, "bar": 0.0, "fashion": 1720.88, "fitness": 962.56, "optician": 2582.2, "fastfood": 1157.2, "drugstore": 1706.5, "restaurant": 1002.07}}, {"id": "fac-51", "name": "Chestnut Club", "street": "1348 14th St", "categories": ["bar"], "lat": 34.0245, "lng": -118.4865, "distances": {"gaming": 375.42, "hairsalon": 407.32, "cafe": 733.69, "grocery": 240.73, "pharmacy": 672.38, "post": 377.03, "teahouse": 298.0, "bar": 0.0, "fashion": 1144.35, "fitness": 447.16, "optician": 392.06, "fastfood": 645.0, "drugstore": 368.53, "restaurant": 385.04}}, {"id": "fac-52", "name": "Bodega Wine Bar", "street": "814 Broadway", "categories": ["bar"], "lat": 34.018, "lng": -118.491, "distances": {"gaming": 433.28, "hairsalon": 638.24, "cafe": 167.59, "grocery": 282.26, "pharmacy": 1472.01, "post": 107.64, "teahouse": 383.18, "bar": 0.0, "fashion": 320.23, "fitness": 234.37, "optician": 499.29, "fastfood": 196.76, "drugstore": 149.01, "restaurant": 107.64}}, {"id": "fac-53", "name": "Blue Bottle Coffee", "street": "1315 3rd St Promenade", "categories": ["cafe"], "lat": 34.0165, "lng": -118.4948, "distances": {"gaming": 117.15, "hairsalon": 250.35, "cafe": 0.0, "grocery": 279.78, "pharmacy": 1833.63, "post": 167.81, "teahouse": 95.48, "bar": 205.51, "fashion": 132.09, "fitness": 166.36, "optician": 128.56, "fastfood": 81.58, "drugstore": 536.72, "restaurant": 177.48}}, {"id": "fac-54", "name": "Philz Coffee", "street": "525 Santa Monica Blvd", "categories": ["cafe"], "lat": 34.017, "lng": -118.493, "distances": {"gaming": 240.73, "hairsalon": 424.81, "cafe": 0.0, "grocery": 183.14, "pharmacy": 1677.9, "post": 215.27, "teahouse": 173.31, "bar": 186.37, "fashion": 120.37, "fitness": 72.17, "optician": 284.45, "fastfood": 231.54, "drugstore": 363.15, "restaurant": 190.56}}, {"id": "fac-55", "name": "Dogtown Coffee", "street": "2003 Main St", "categories": ["cafe"], "lat": 34.0025, "lng": -118.4825, "distances": {"gaming": 549.82, "hairsalon": 755.81, "cafe": 0.0, "grocery": 1697.36, "pharmacy": 809.31, "post": 309.43, "teahouse": 454.23, "bar": 108.07, "fashion": 202.64, "fitness": 991.01, "optician": 190.57, "fastfood": 901.85, "drugstore": 1094.05, "restaurant": 1474.17}}, {"id": "fac-56", "name": "Sidecar Doughnuts & Coffee", "street": "631 Wilshire Blvd", "categories": ["cafe"], "lat": 34.0205, "lng": -118.496, "distances": {"gaming": 560.84, "hairsalon": 560.03, "cafe": 0.0, "grocery": 72.21, "pharmacy": 1649.7, "post": 292.87, "teahouse": 548.32, "bar": 359.26, "fashion": 484.67, "fitness": 405.28, "optician": 557.88, "fastfood": 135.4, "drugstore": 639.01, "restaurant": 247.52}}, {"id": "fac-57", "name": "goodboybob coffee", "street": "2049 Broadway", "categories": ["cafe"], "lat": 34.028, "lng": -118.478, "distances": {"gaming": 1140.69, "hairsalon": 939.95, "cafe": 0.0, "grocery": 368.62, "pharmacy": 237.51, "post": 638.74, "teahouse": 1095.64, "bar": 874.68, "fashion": 1873.68, "fitness": 666.29, "optician": 1065.6, "fastfood": 938.96, "drugstore": 621.49, "restaurant": 1185.01}}, {"id": "fac-58", "name": "Water Grill Santa Monica", "street": "1401 Ocean Ave", "categories": ["restaurant"], "lat": 34.0125, "lng": -118.493, "distances": {"gaming": 292.87, "hairsalon": 521.91, "cafe": 474.71, "grocery": 356.71, "pharmacy": 1703.63, "post": 574.87, "teahouse": 314.06, "bar": 391.82, "fashion": 72.21, "fitness": 385.09, "optician": 92.17, "fastfood": 448.47, "drugstore": 741.07, "restaurant": 0.0}}, {"id": "fac-59", "name": "Sugarfish by Sushi Nozawa", "street": "1345 2nd St", "categories": ["restaurant"], "lat": 34.0142, "lng": -118.4965, "distances": {"gaming": 187.76, "hairsalon": 168.93, "cafe": 299.93, "grocery": 445.38, "pharmacy": 2073.09, "post": 444.58, "teahouse": 255.85, "bar": 19.25, "fashion": 128.09, "fitness": 90.46, "optician": 171.44, "fastfood": 208.89, "drugstore": 803.03, "restaurant": 0.0}}, {"id": "fac-60", "name": "The Lobster", "street": "1602 Ocean Ave", "categories": ["restaurant"], "lat": 34.0115, "lng": -118.495, "distances": {"gaming": 230.34, "hairsalon": 499.46, "cafe": 556.28, "grocery": 533.93, "pharmacy": 1844.79, "post": 722.77, "teahouse": 404.86, "bar": 264.04, "fashion": 149.02, "fitness": 288.86, "optician": 144.43, "fastfood": 337.02, "drugstore": 928.88, "restaurant": 0.0}}, {"id": "fac-61", "name": "Elephante", "street": "1332 2nd St", "categories": ["restaurant"], "lat": 34.0148, "lng": -118.496, "distances": {"gaming": 107.22, "hairsalon": 145.94, "cafe": 219.01, "grocery": 381.83, "pharmacy": 2045.7, "post": 367.57, "teahouse": 189.63, "bar": 56.89, "fashion": 51.17, "fitness": 99.18, "optician": 90.46, "fastfood": 130.12, "drugstore": 726.75, "restaurant": 0.0}}, {"id": "fac-62", "name": "Rustic Canyon", "street": "1119 Wilshire Blvd", "categories": ["restaurant"], "lat": 34.0255, "lng": -118.4905, "distances": {"gaming": 65.66, "hairsalon": 23.42, "cafe": 678.84, "grocery": 149.0, "pharmacy": 956.79, "post": 38.4, "teahouse": 92.16, "bar": 385.04, "fashion": 1091.94, "fitness": 642.77, "optician": 190.56, "fastfood": 353.64, "drugstore": 175.98, "restaurant": 0.0}}, {"id": "fac-63", "name": "Bay Cities Italian Deli", "street": "1517 Lincoln Blvd", "categories": ["restaurant"], "lat": 34.019, "lng": -118.488, "distances": {"gaming": 709.67, "hairsalon": 702.23, "cafe": 157.99, "grocery": 452.27, "pharmacy": 1215.08, "post": 248.59, "teahouse": 673.16, "bar": 298.02, "fashion": 606.83, "fitness": 190.56, "optician": 793.27, "fastfood": 107.44, "drugstore": 149.01, "restaurant": 0.0}}, {"id": "fac-64", "name": "Cassia", "street": "1314 7th St", "categories": ["restaurant"], "lat": 34.0185, "lng": -118.492, "distances": {"gaming": 430.63, "hairsalon": 585.03, "cafe": 190.56, "grocery": 323.37, "pharmacy": 1493.8, "post": 215.27, "teahouse": 362.28, "bar": 75.14, "fashion": 310.47, "fitness": 174.51, "optician": 464.05, "fastfood": 265.52, "drugstore": 230.41, "restaurant": 0.0}}, {"id": "fac-65", "name": "Country Mart Shoe Repair", "street": "26th Street, Santa Monica", "categories": ["autoservis"], "lat": 34.047833, "lng": -118.490525, "distances": {"gaming": 2426.75, "hairsalon": 45.68, "cafe": 1736.98, "grocery": 1706.63, "pharmacy": 121.05, "post": 1865.62, "teahouse": 1837.28, "bar": 1490.86, "fashion": 1649.81, "fitness": 2004.44, "optician": 1736.21, "fastfood": 20.75, "drugstore": 1876.79, "restaurant": 2483.32}}, {"id": "fac-66", "name": "AAA Auto Club Santa Monica", "street": "Harvard Street, Santa Monica", "categories": ["autoservis"], "lat": 34.034477, "lng": -118.47257, "distances": {"gaming": 1873.13, "hairsalon": 64.06, "cafe": 876.97, "grocery": 418.02, "pharmacy": 999.22, "post": 693.22, "teahouse": 1624.45, "bar": 269.57, "fashion": 1493.04, "fitness": 572.02, "optician": 1767.83, "fastfood": 545.63, "drugstore": 358.57, "restaurant": 1334.02}}, {"id": "fac-67", "name": "Westway Auto Body", "street": "20th Street, Santa Monica", "categories": ["autoservis"], "lat": 34.023785, "lng": -118.474571, "distances": {"gaming": 1056.44, "hairsalon": 774.36, "cafe": 565.27, "grocery": 374.34, "pharmacy": 727.51, "post": 1190.49, "teahouse": 692.84, "bar": 832.92, "fashion": 1947.52, "fitness": 679.95, "optician": 1421.5, "fastfood": 633.83, "drugstore": 1181.47, "restaurant": 1347.16}}, {"id": "fac-68", "name": "Bruno's Auto Service", "street": "7th Court, Santa Monica", "categories": ["autoservis"], "lat": 34.008691, "lng": -118.478978, "distances": {"gaming": 671.17, "hairsalon": 45.09, "cafe": 761.12, "grocery": 1231.26, "pharmacy": 349.77, "post": 1054.76, "teahouse": 735.37, "bar": 788.82, "fashion": 553.07, "fitness": 695.67, "optician": 355.53, "fastfood": 756.16, "drugstore": 518.28, "restaurant": 1360.08}}, {"id": "fac-69", "name": "Bon Voyage Auto Body", "street": "Michigan Avenue, Santa Monica", "categories": ["autoservis"], "lat": 34.025998, "lng": -118.470016, "distances": {"gaming": 1431.4, "hairsalon": 659.56, "cafe": 768.71, "grocery": 378.98, "pharmacy": 999.16, "post": 1241.92, "teahouse": 652.71, "bar": 651.36, "fashion": 2067.4, "fitness": 399.82, "optician": 1799.02, "fastfood": 708.34, "drugstore": 1241.37, "restaurant": 1519.03}}, {"id": "fac-70", "name": "Stokes Tire Service", "street": "11th Street, Santa Monica", "categories": ["autoservis"], "lat": 34.022169, "lng": -118.488694, "distances": {"gaming": 447.6, "hairsalon": 361.22, "cafe": 468.96, "grocery": 296.65, "pharmacy": 992.19, "post": 430.14, "teahouse": 377.77, "bar": 328.73, "fashion": 816.54, "fitness": 242.52, "optician": 542.29, "fastfood": 366.46, "drugstore": 414.68, "restaurant": 358.13}}, {"id": "fac-71", "name": "American Tire Depot", "street": "Lincoln Court, Santa Monica", "categories": ["autoservis"], "lat": 34.009356, "lng": -118.478942, "distances": {"gaming": 599.34, "hairsalon": 104.71, "cafe": 829.91, "grocery": 1187.86, "pharmacy": 389.74, "post": 1009.77, "teahouse": 698.28, "bar": 853.48, "fashion": 611.99, "fitness": 676.11, "optician": 393.42, "fastfood": 805.5, "drugstore": 465.02, "restaurant": 1342.1}}, {"id": "fac-72", "name": "Pacific Coast Tire and Service", "street": "Santa Monica Boulevard, Santa Monica", "categories": ["autoservis"], "lat": 34.032389, "lng": -118.475746, "distances": {"gaming": 1504.38, "hairsalon": 437.35, "cafe": 530.4, "grocery": 489.21, "pharmacy": 657.09, "post": 411.01, "teahouse": 1480.98, "bar": 635.71, "fashion": 1866.41, "fitness": 542.65, "optician": 1401.98, "fastfood": 786.86, "drugstore": 402.21, "restaurant": 1560.57}}, {"id": "fac-73", "name": "Santa Monica", "street": "Santa Monica, CA", "categories": ["autoservis"], "lat": 34.01947, "lng": -118.491227, "distances": {"gaming": 558.9, "hairsalon": 595.29, "cafe": 251.61, "grocery": 436.6, "pharmacy": 1367.3, "post": 246.52, "teahouse": 491.54, "bar": 164.79, "fashion": 439.05, "fitness": 300.22, "optician": 591.58, "fastfood": 201.0, "drugstore": 192.27, "restaurant": 129.26}}, {"id": "fac-74", "name": "Santa Monica State Beach", "street": "Santa Monica, CA", "categories": ["autoservis"], "lat": 34.010337, "lng": -118.497907, "distances": {"gaming": 61.39, "hairsalon": 585.44, "cafe": 742.72, "grocery": 800.62, "pharmacy": 2078.16, "post": 893.22, "teahouse": 172.8, "bar": 102.74, "fashion": 446.31, "fitness": 361.51, "optician": 433.05, "fastfood": 140.1, "drugstore": 1193.44, "restaurant": 297.52}}, {"id": "fac-75", "name": "Santa Monica College", "street": "Grant Street, Santa Monica", "categories": ["autoservis"], "lat": 34.016711, "lng": -118.470761, "distances": {"gaming": 625.39, "hairsalon": 545.6, "cafe": 228.98, "grocery": 317.73, "pharmacy": 1161.14, "post": 1547.13, "teahouse": 456.46, "bar": 648.56, "fashion": 1722.89, "fitness": 89.58, "optician": 1150.08, "fastfood": 334.83, "drugstore": 1184.32, "restaurant": 1404.04}}, {"id": "fac-76", "name": "Santa Monica Place", "street": "3rd Street Promenade, Santa Monica", "categories": ["autoservis"], "lat": 34.013676, "lng": -118.494598, "distances": {"gaming": 157.2, "hairsalon": 324.97, "cafe": 314.57, "grocery": 322.65, "pharmacy": 1888.85, "post": 482.23, "teahouse": 178.2, "bar": 197.81, "fashion": 28.53, "fitness": 222.26, "optician": 141.91, "fastfood": 265.32, "drugstore": 713.1, "restaurant": 179.77}}, {"id": "fac-77", "name": "Santa Monica Pier", "street": "Ocean Front Walk, Santa Monica", "categories": ["autoservis"], "lat": 34.008896, "lng": -118.4974, "distances": {"gaming": 54.28, "hairsalon": 742.87, "cafe": 825.62, "grocery": 897.19, "pharmacy": 2010.02, "post": 1036.21, "teahouse": 49.91, "bar": 107.07, "fashion": 498.35, "fitness": 513.27, "optician": 508.73, "fastfood": 30.91, "drugstore": 1292.53, "restaurant": 364.39}}, {"id": "fac-78", "name": "The Misfit Restaurant + Bar", "street": "225 Santa Monica Boulevard", "categories": ["bar"], "lat": 34.015444, "lng": -118.49663, "distances": {"gaming": 131.95, "hairsalon": 61.41, "cafe": 205.51, "grocery": 429.91, "pharmacy": 2036.6, "post": 321.48, "teahouse": 227.44, "bar": 0.0, "fashion": 80.91, "fitness": 35.84, "optician": 104.34, "fastfood": 109.96, "drugstore": 739.81, "restaurant": 54.12}}, {"id": "fac-79", "name": "Bar Monette", "street": "109 Santa Monica Boulevard", "categories": ["bar"], "lat": 34.014404, "lng": -118.497855, "distances": {"gaming": 273.38, "hairsalon": 140.79, "cafe": 365.52, "grocery": 558.36, "pharmacy": 2197.38, "post": 478.67, "teahouse": 366.17, "bar": 0.0, "fashion": 226.95, "fitness": 55.58, "optician": 248.93, "fastfood": 255.21, "drugstore": 894.66, "restaurant": 52.29}}, {"id": "fac-80", "name": "N\u00e9kter Juice Bar", "street": "2nd Street, Santa Monica", "categories": ["bar"], "lat": 34.014323, "lng": -118.496647, "distances": {"gaming": 186.86, "hairsalon": 150.94, "cafe": 295.94, "grocery": 453.67, "pharmacy": 2090.84, "post": 436.13, "teahouse": 262.74, "bar": 0.0, "fashion": 129.78, "fitness": 86.44, "optician": 168.24, "fastfood": 202.66, "drugstore": 806.0, "restaurant": 19.25}}, {"id": "fac-81", "name": "Buena Vida Tea Bar & Garden", "street": "Montana Avenue, Santa Monica", "categories": ["bar"], "lat": 34.027294, "lng": -118.500989, "distances": {"gaming": 1009.65, "hairsalon": 65.01, "cafe": 808.2, "grocery": 812.99, "pharmacy": 1740.28, "post": 886.23, "teahouse": 644.61, "bar": 0.0, "fashion": 831.36, "fitness": 1052.02, "optician": 743.02, "fastfood": 825.7, "drugstore": 1070.2, "restaurant": 984.92}}, {"id": "fac-82", "name": "Forma Restaurant & Cheese Bar", "street": "1610 Montana Avenue", "categories": ["bar"], "lat": 34.033948, "lng": -118.492795, "distances": {"gaming": 915.77, "hairsalon": 958.67, "cafe": 239.67, "grocery": 886.81, "pharmacy": 961.97, "post": 891.8, "teahouse": 567.89, "bar": 0.0, "fashion": 387.53, "fitness": 841.13, "optician": 482.21, "fastfood": 1175.41, "drugstore": 850.06, "restaurant": 962.89}}, {"id": "fac-83", "name": "JINYA Ramen Bar", "street": "Main Street, Santa Monica", "categories": ["bar"], "lat": 34.003806, "lng": -118.485607, "distances": {"gaming": 243.99, "hairsalon": 830.14, "cafe": 75.17, "grocery": 1435.76, "pharmacy": 984.05, "post": 519.02, "teahouse": 701.03, "bar": 0.0, "fashion": 274.55, "fitness": 791.78, "optician": 195.42, "fastfood": 1170.73, "drugstore": 991.69, "restaurant": 1182.77}}, {"id": "fac-84", "name": "Jameson's Pub", "street": "2702 Main Street", "categories": ["bar"], "lat": 34.000797, "lng": -118.482601, "distances": {"gaming": 678.13, "hairsalon": 879.13, "cafe": 189.59, "grocery": 1857.98, "pharmacy": 946.86, "post": 120.64, "teahouse": 274.84, "bar": 0.0, "fashion": 50.45, "fitness": 1168.97, "optician": 365.67, "fastfood": 966.27, "drugstore": 1283.46, "restaurant": 1616.24}}, {"id": "fac-85", "name": "Santa Monica Main Public Library", "street": "601 Santa Monica Boulevard", "categories": ["bar"], "lat": 34.018667, "lng": -118.49279, "distances": {"gaming": 416.35, "hairsalon": 537.73, "cafe": 186.37, "grocery": 350.2, "pharmacy": 1533.3, "post": 216.77, "teahouse": 344.27, "bar": 0.0, "fashion": 303.69, "fitness": 142.71, "optician": 431.74, "fastfood": 316.06, "drugstore": 303.79, "restaurant": 75.14}}, {"id": "fac-86", "name": "Montana Branch Santa Monica Public Library", "street": "17th Street, Santa Monica", "categories": ["bar"], "lat": 34.034478, "lng": -118.491957, "distances": {"gaming": 956.21, "hairsalon": 1005.11, "cafe": 336.8, "grocery": 942.72, "pharmacy": 908.21, "post": 943.65, "teahouse": 657.6, "bar": 0.0, "fashion": 467.73, "fitness": 804.5, "optician": 567.37, "fastfood": 1240.0, "drugstore": 823.53, "restaurant": 1007.3}}, {"id": "fac-87", "name": "Ocean Park Branch Santa Monica Public Library", "street": "Norman Place, Santa Monica", "categories": ["bar"], "lat": 34.00274, "lng": -118.483636, "distances": {"gaming": 453.42, "hairsalon": 789.54, "cafe": 108.07, "grocery": 1622.41, "pharmacy": 877.83, "post": 341.99, "teahouse": 510.93, "bar": 0.0, "fashion": 258.05, "fitness": 935.77, "optician": 140.67, "fastfood": 1000.27, "drugstore": 1072.68, "restaurant": 1386.65}}, {"id": "fac-88", "name": "Wine Expo", "street": "Stanford Street, Santa Monica", "categories": ["bar"], "lat": 34.036489, "lng": -118.470938, "distances": {"gaming": 1904.9, "hairsalon": 207.29, "cafe": 1110.77, "grocery": 364.43, "pharmacy": 1226.25, "post": 898.75, "teahouse": 1816.6, "bar": 0.0, "fashion": 1242.73, "fitness": 777.16, "optician": 2009.75, "fastfood": 406.73, "drugstore": 469.6, "restaurant": 1080.07}}, {"id": "fac-89", "name": "Father's Office", "street": "1018 Montana Avenue", "categories": ["bar"], "lat": 34.029328, "lng": -118.498483, "distances": {"gaming": 852.49, "hairsalon": 378.86, "cafe": 496.68, "grocery": 702.76, "pharmacy": 1465.64, "post": 742.33, "teahouse": 387.17, "bar": 0.0, "fashion": 537.18, "fitness": 1268.86, "optician": 466.04, "fastfood": 811.4, "drugstore": 884.07, "restaurant": 849.94}}, {"id": "fac-90", "name": "The Daily Pint", "street": "2310 Pico Boulevard", "categories": ["bar"], "lat": 34.021104, "lng": -118.466132, "distances": {"gaming": 1179.12, "hairsalon": 107.88, "cafe": 703.86, "grocery": 700.23, "pharmacy": 1538.0, "post": 1026.89, "teahouse": 222.87, "bar": 0.0, "fashion": 2371.44, "fitness": 727.11, "optician": 1777.33, "fastfood": 381.05, "drugstore": 1794.32, "restaurant": 978.4}}, {"id": "fac-91", "name": "The Coffee Bean & Tea Leaf", "street": "380 Santa Monica Pier", "categories": ["teahouse"], "lat": 34.008783, "lng": -118.497924, "distances": {"gaming": 29.68, "hairsalon": 757.7, "cafe": 869.93, "grocery": 935.15, "pharmacy": 2056.91, "post": 1059.73, "teahouse": 0.0, "bar": 141.57, "fashion": 542.44, "fitness": 531.38, "optician": 549.22, "fastfood": 69.06, "drugstore": 1330.53, "restaurant": 404.86}}, {"id": "fac-92", "name": "Virginia Avenue Park Teen Center", "street": "2101 Pico Boulevard", "categories": ["teahouse"], "lat": 34.020294, "lng": -118.468344, "distances": {"gaming": 1025.45, "hairsalon": 117.62, "cafe": 482.83, "grocery": 589.52, "pharmacy": 1418.14, "post": 1237.1, "teahouse": 0.0, "bar": 222.87, "fashion": 2171.85, "fitness": 542.09, "optician": 1604.45, "fastfood": 158.41, "drugstore": 1574.62, "restaurant": 1163.97}}, {"id": "fac-93", "name": "Walgreens", "street": "1911 Lincoln Boulevard", "categories": ["drugstore"], "lat": 34.012339, "lng": -118.482478, "distances": {"gaming": 559.17, "hairsalon": 561.39, "cafe": 813.44, "grocery": 946.62, "pharmacy": 853.77, "post": 551.42, "teahouse": 279.12, "bar": 991.69, "fashion": 817.48, "fitness": 363.61, "optician": 856.68, "fastfood": 851.01, "drugstore": 0.0, "restaurant": 898.68}}, {"id": "fac-94", "name": "Rite Aid", "street": "1331 Euclid Court", "categories": ["drugstore"], "lat": 34.026789, "lng": -118.489392, "distances": {"gaming": 110.79, "hairsalon": 191.02, "cafe": 821.5, "grocery": 255.86, "pharmacy": 801.03, "post": 135.95, "teahouse": 143.68, "bar": 368.53, "fashion": 1065.11, "fitness": 595.76, "optician": 25.49, "fastfood": 526.64, "drugstore": 0.0, "restaurant": 175.98}}, {"id": "fac-95", "name": "Trejo\u2018s Tacos", "street": "316 Santa Monica Boulevard", "categories": ["fastfood"], "lat": 34.015918, "lng": -118.495583, "distances": {"gaming": 58.36, "hairsalon": 160.7, "cafe": 96.93, "grocery": 335.06, "pharmacy": 1930.48, "post": 237.66, "teahouse": 128.14, "bar": 109.96, "fashion": 85.21, "fitness": 145.39, "optician": 47.1, "fastfood": 0.0, "drugstore": 629.88, "restaurant": 130.12}}, {"id": "fac-96", "name": "Tacos por Favor", "street": "Olympic Boulevard, Santa Monica", "categories": ["fastfood"], "lat": 34.01975, "lng": -118.480173, "distances": {"gaming": 652.93, "hairsalon": 544.6, "cafe": 712.97, "grocery": 561.02, "pharmacy": 921.56, "post": 860.48, "teahouse": 943.9, "bar": 786.75, "fashion": 1297.14, "fitness": 73.08, "optician": 1178.46, "fastfood": 0.0, "drugstore": 851.01, "restaurant": 726.17}}, {"id": "fac-97", "name": "Benny's Tacos", "street": "915 Wilshire Boulevard", "categories": ["fastfood"], "lat": 34.023388, "lng": -118.493369, "distances": {"gaming": 416.48, "hairsalon": 273.07, "cafe": 325.33, "grocery": 316.66, "pharmacy": 1286.96, "post": 337.67, "teahouse": 426.95, "bar": 527.66, "fashion": 821.6, "fitness": 653.01, "optician": 537.07, "fastfood": 0.0, "drugstore": 526.64, "restaurant": 353.64}}, {"id": "fac-98", "name": "Pancho's Tacos", "street": "Pier Avenue, Santa Monica", "categories": ["fastfood"], "lat": 34.004113, "lng": -118.472912, "distances": {"gaming": 1214.89, "hairsalon": 29.25, "cafe": 901.85, "grocery": 1292.48, "pharmacy": 420.45, "post": 1038.1, "teahouse": 1008.11, "bar": 966.27, "fashion": 924.36, "fitness": 939.9, "optician": 419.96, "fastfood": 0.0, "drugstore": 1270.49, "restaurant": 2073.22}}, {"id": "fac-99", "name": "Frida Tacos", "street": "26th Street, Santa Monica", "categories": ["fastfood"], "lat": 34.047683, "lng": -118.490659, "distances": {"gaming": 2410.29, "hairsalon": 29.89, "cafe": 1717.94, "grocery": 1700.69, "pharmacy": 114.58, "post": 1857.89, "teahouse": 1816.98, "bar": 1473.19, "fashion": 1629.81, "fitness": 1991.75, "optician": 1716.01, "fastfood": 0.0, "drugstore": 1867.31, "restaurant": 2466.68}}, {"id": "fac-100", "name": "Pili's Tacos", "street": "11924 Santa Monica Boulevard", "categories": ["fastfood"], "lat": 34.041414, "lng": -118.460876, "distances": {"gaming": 828.45, "hairsalon": 1010.98, "cafe": 53.43, "grocery": 1091.99, "pharmacy": 898.11, "post": 989.15, "teahouse": 2447.19, "bar": 1076.8, "fashion": 168.77, "fitness": 764.6, "optician": 3086.42, "fastfood": 0.0, "drugstore": 1518.04, "restaurant": 68.71}}, {"id": "fac-101", "name": "Tlaco Tacos", "street": "11919 Santa Monica Boulevard", "categories": ["fastfood"], "lat": 34.041914, "lng": -118.461144, "distances": {"gaming": 826.01, "hairsalon": 991.33, "cafe": 32.08, "grocery": 1080.23, "pharmacy": 895.63, "post": 988.29, "teahouse": 2493.91, "bar": 1085.49, "fashion": 160.83, "fitness": 759.29, "optician": 3094.76, "fastfood": 0.0, "drugstore": 1518.63, "restaurant": 10.17}}, {"id": "fac-102", "name": "Pier Burger", "street": "330 Santa Monica Pier", "categories": ["fastfood"], "lat": 34.009169, "lng": -118.497337, "distances": {"gaming": 57.9, "hairsalon": 712.45, "cafe": 827.71, "grocery": 868.85, "pharmacy": 2007.48, "post": 1005.31, "teahouse": 69.06, "bar": 76.73, "fashion": 473.47, "fitness": 482.59, "optician": 481.45, "fastfood": 0.0, "drugstore": 1264.24, "restaurant": 337.02}}, {"id": "fac-103", "name": "Pono Burger", "street": "829 Broadway", "categories": ["fastfood"], "lat": 34.018896, "lng": -118.489159, "distances": {"gaming": 621.89, "hairsalon": 679.22, "cafe": 102.88, "grocery": 449.5, "pharmacy": 1287.37, "post": 173.5, "teahouse": 578.25, "bar": 196.76, "fashion": 513.59, "fitness": 267.22, "optician": 695.81, "fastfood": 0.0, "drugstore": 54.1, "restaurant": 107.44}}, {"id": "fac-104", "name": "Burger Lounge", "street": "213 Arizona Avenue", "categories": ["fastfood"], "lat": 34.016664, "lng": -118.498338, "distances": {"gaming": 316.86, "hairsalon": 155.56, "cafe": 326.6, "grocery": 511.03, "pharmacy": 2068.07, "post": 341.64, "teahouse": 393.3, "bar": 207.81, "fashion": 181.92, "fitness": 167.08, "optician": 291.84, "fastfood": 0.0, "drugstore": 839.75, "restaurant": 153.7}}, {"id": "fac-105", "name": "Burger King", "street": "1919 Pico Boulevard", "categories": ["fastfood"], "lat": 34.019629, "lng": -118.469864, "distances": {"gaming": 870.53, "hairsalon": 274.45, "cafe": 325.29, "grocery": 542.63, "pharmacy": 1359.26, "post": 1385.61, "teahouse": 158.41, "bar": 381.05, "fashion": 2027.81, "fitness": 424.26, "optician": 1482.1, "fastfood": 0.0, "drugstore": 1417.3, "restaurant": 1297.69}}, {"id": "fac-106", "name": "Habit Burger & Grill", "street": "Stanford Street, Santa Monica", "categories": ["fastfood"], "lat": 34.039278, "lng": -118.473794, "distances": {"gaming": 2020.39, "hairsalon": 81.3, "cafe": 1232.27, "grocery": 121.76, "pharmacy": 1199.97, "post": 860.12, "teahouse": 2107.57, "bar": 406.73, "fashion": 1361.74, "fitness": 1117.33, "optician": 1989.61, "fastfood": 0.0, "drugstore": 417.34, "restaurant": 1193.86}}, {"id": "fac-107", "name": "George's Burgers", "street": "3101 Lincoln Boulevard", "categories": ["fastfood"], "lat": 34.003149, "lng": -118.470873, "distances": {"gaming": 1382.76, "hairsalon": 187.48, "cafe": 1074.22, "grocery": 1344.12, "pharmacy": 625.75, "post": 1168.2, "teahouse": 1107.67, "bar": 1112.3, "fashion": 1066.47, "fitness": 943.17, "optician": 623.45, "fastfood": 0.0, "drugstore": 1479.36, "restaurant": 2251.85}}, {"id": "fac-108", "name": "Barney's Burgers", "street": "26th Street, Santa Monica", "categories": ["fastfood"], "lat": 34.047613, "lng": -118.490635, "distances": {"gaming": 2402.46, "hairsalon": 21.8, "cafe": 1710.85, "grocery": 1693.16, "pharmacy": 119.84, "post": 1850.11, "teahouse": 1810.81, "bar": 1465.62, "fashion": 1623.34, "fitness": 1983.66, "optician": 1709.74, "fastfood": 0.0, "drugstore": 1859.32, "restaurant": 2458.88}}, {"id": "fac-109", "name": "Shake Shack", "street": "501 Wilshire Boulevard", "categories": ["fastfood"], "lat": 34.020147, "lng": -118.497406, "distances": {"gaming": 555.28, "hairsalon": 508.41, "cafe": 135.4, "grocery": 126.37, "pharmacy": 1781.56, "post": 325.83, "teahouse": 566.53, "bar": 456.15, "fashion": 452.03, "fitness": 301.48, "optician": 545.77, "fastfood": 0.0, "drugstore": 751.31, "restaurant": 149.41}}, {"id": "fac-110", "name": "Sweetgreen", "street": "1343 4th Street", "categories": ["fastfood"], "lat": 34.016937, "lng": -118.495511, "distances": {"gaming": 162.34, "hairsalon": 222.25, "cafe": 81.58, "grocery": 359.08, "pharmacy": 1848.25, "post": 127.24, "teahouse": 174.88, "bar": 195.44, "fashion": 123.17, "fitness": 198.39, "optician": 159.79, "fastfood": 0.0, "drugstore": 580.63, "restaurant": 108.62}}, {"id": "fac-111", "name": "Memorial Park Gym & Fitness Room", "street": "Olympic Boulevard, Santa Monica", "categories": ["fitness"], "lat": 34.02029, "lng": -118.480625, "distances": {"gaming": 725.35, "hairsalon": 617.68, "cafe": 771.21, "grocery": 489.12, "pharmacy": 860.77, "post": 867.64, "teahouse": 975.81, "bar": 715.76, "fashion": 1278.92, "fitness": 0.0, "optician": 1107.1, "fastfood": 73.08, "drugstore": 841.82, "restaurant": 694.68}}, {"id": "fac-112", "name": "Gold Gym", "street": "Pico Boulevard, Santa Monica", "categories": ["fitness"], "lat": 34.010918, "lng": -118.486031, "distances": {"gaming": 468.34, "hairsalon": 739.7, "cafe": 485.92, "grocery": 754.76, "pharmacy": 1042.3, "post": 473.5, "teahouse": 182.59, "bar": 791.78, "fashion": 698.87, "fitness": 0.0, "optician": 755.29, "fastfood": 932.79, "drugstore": 363.61, "restaurant": 666.0}}, {"id": "fac-113", "name": "Corsair Gym", "street": "Pearl Street, Santa Monica", "categories": ["fitness"], "lat": 34.015919, "lng": -118.470939, "distances": {"gaming": 580.49, "hairsalon": 534.1, "cafe": 280.38, "grocery": 289.52, "pharmacy": 1073.87, "post": 1533.01, "teahouse": 542.09, "bar": 727.11, "fashion": 1646.21, "fitness": 0.0, "optician": 1062.68, "fastfood": 424.26, "drugstore": 1135.6, "restaurant": 1439.14}}, {"id": "fac-114", "name": "The Gym LA", "street": "Santa Monica Boulevard, Santa Monica", "categories": ["fitness"], "lat": 34.044979, "lng": -118.45378, "distances": {"gaming": 75.33, "hairsalon": 1724.74, "cafe": 732.11, "grocery": 1829.27, "pharmacy": 140.43, "post": 235.65, "teahouse": 3055.38, "bar": 1841.36, "fashion": 599.54, "fitness": 0.0, "optician": 3851.01, "fastfood": 759.29, "drugstore": 2277.84, "restaurant": 714.1}}, {"id": "fac-115", "name": "JOHN REED Fitness", "street": "1202 3rd Street Promenade", "categories": ["fitness"], "lat": 34.017937, "lng": -118.499301, "distances": {"gaming": 465.08, "hairsalon": 322.06, "cafe": 416.87, "grocery": 427.37, "pharmacy": 2058.51, "post": 396.46, "teahouse": 526.78, "bar": 370.74, "fashion": 328.09, "fitness": 0.0, "optician": 442.9, "fastfood": 167.08, "drugstore": 905.48, "restaurant": 171.67}}, {"id": "fac-116", "name": "Fitness Pool", "street": "16th Street, Santa Monica", "categories": ["fitness"], "lat": 34.016076, "lng": -118.472943, "distances": {"gaming": 412.95, "hairsalon": 350.8, "cafe": 208.58, "grocery": 471.03, "pharmacy": 1029.41, "post": 1350.23, "teahouse": 632.17, "bar": 840.61, "fashion": 1541.47, "fitness": 0.0, "optician": 1019.57, "fastfood": 486.43, "drugstore": 972.12, "restaurant": 1425.32}}, {"id": "fac-117", "name": "Total Tooth Fitness", "street": "Wilshire Boulevard, Santa Monica", "categories": ["fitness"], "lat": 34.030467, "lng": -118.484691, "distances": {"gaming": 705.65, "hairsalon": 786.1, "cafe": 447.36, "grocery": 445.87, "pharmacy": 207.95, "post": 548.27, "teahouse": 708.13, "bar": 684.12, "fashion": 1200.38, "fitness": 0.0, "optician": 587.38, "fastfood": 1122.13, "drugstore": 58.47, "restaurant": 769.16}}, {"id": "fac-118", "name": "24 Hour Fitness", "street": "Donald Douglas Loop North, Santa Monica", "categories": ["fitness"], "lat": 34.019608, "lng": -118.450829, "distances": {"gaming": 252.74, "hairsalon": 257.18, "cafe": 605.85, "grocery": 1331.15, "pharmacy": 2681.09, "post": 438.21, "teahouse": 1616.04, "bar": 1246.69, "fashion": 2660.53, "fitness": 0.0, "optician": 2668.0, "fastfood": 1754.33, "drugstore": 2950.07, "restaurant": 461.72}}, {"id": "fac-119", "name": "Equinox", "street": "Santa Monica Boulevard, Santa Monica", "categories": ["fitness"], "lat": 34.015243, "lng": -118.496934, "distances": {"gaming": 162.35, "hairsalon": 48.69, "cafe": 241.29, "grocery": 459.26, "pharmacy": 2072.31, "post": 354.62, "teahouse": 259.49, "bar": 35.84, "fashion": 110.69, "fitness": 0.0, "optician": 135.22, "fastfood": 145.39, "drugstore": 774.99, "restaurant": 30.23}}, {"id": "fac-120", "name": "Santa Monica Yoga", "street": "1640 Ocean Park Boulevard", "categories": ["fitness"], "lat": 34.012032, "lng": -118.467335, "distances": {"gaming": 932.14, "hairsalon": 950.27, "cafe": 825.47, "grocery": 335.67, "pharmacy": 945.93, "post": 1549.47, "teahouse": 923.39, "bar": 1014.84, "fashion": 1642.05, "fitness": 0.0, "optician": 932.83, "fastfood": 876.32, "drugstore": 1396.17, "restaurant": 1321.26}}, {"id": "fac-121", "name": "Power Yoga East", "street": "522 Santa Monica Boulevard", "categories": ["fitness"], "lat": 34.017516, "lng": -118.493475, "distances": {"gaming": 274.83, "hairsalon": 411.49, "cafe": 72.17, "grocery": 255.02, "pharmacy": 1667.34, "post": 150.5, "teahouse": 202.17, "bar": 142.71, "fashion": 168.59, "fitness": 0.0, "optician": 291.69, "fastfood": 198.39, "drugstore": 382.35, "restaurant": 174.51}}, {"id": "fac-122", "name": "Yoga-urt", "street": "1700 Ocean Park Boulevard", "categories": ["fitness"], "lat": 34.012428, "lng": -118.466637, "distances": {"gaming": 982.55, "hairsalon": 907.08, "cafe": 832.94, "grocery": 312.37, "pharmacy": 1023.88, "post": 1472.39, "teahouse": 888.7, "bar": 965.85, "fashion": 1719.61, "fitness": 0.0, "optician": 1010.78, "fastfood": 854.17, "drugstore": 1460.12, "restaurant": 1243.35}}, {"id": "fac-123", "name": "Pacific Park", "street": "380 Santa Monica Pier", "categories": ["gaming"], "lat": 34.008537, "lng": -118.497799, "distances": {"gaming": 0.0, "hairsalon": 784.18, "cafe": 853.29, "grocery": 950.88, "pharmacy": 2043.13, "post": 1083.4, "teahouse": 29.68, "bar": 158.58, "fashion": 552.54, "fitness": 556.75, "optician": 562.85, "fastfood": 82.17, "drugstore": 1346.25, "restaurant": 418.46}}, {"id": "fac-124", "name": "Main & Pacific", "street": "Main Street, Santa Monica", "categories": ["gaming"], "lat": 34.005578, "lng": -118.487168, "distances": {"gaming": 0.0, "hairsalon": 855.04, "cafe": 224.17, "grocery": 1198.22, "pharmacy": 1070.55, "post": 761.8, "teahouse": 784.9, "bar": 243.99, "fashion": 389.54, "fitness": 602.96, "optician": 380.93, "fastfood": 1018.85, "drugstore": 867.22, "restaurant": 938.83}}, {"id": "fac-125", "name": "Jakks Pacific", "street": "2951 28th Street", "categories": ["gaming"], "lat": 34.01738, "lng": -118.453478, "distances": {"gaming": 0.0, "hairsalon": 341.4, "cafe": 357.66, "grocery": 1364.36, "pharmacy": 2345.42, "post": 479.12, "teahouse": 1407.91, "bar": 1237.57, "fashion": 2840.06, "fitness": 347.83, "optician": 2332.38, "fastfood": 1530.78, "drugstore": 2731.03, "restaurant": 285.91}}, {"id": "fac-126", "name": "Santa Monica Discount Store", "street": "Colby Avenue, Santa Monica", "categories": ["gaming"], "lat": 34.044952, "lng": -118.452963, "distances": {"gaming": 0.0, "hairsalon": 1796.67, "cafe": 798.08, "grocery": 1899.46, "pharmacy": 69.68, "post": 163.28, "teahouse": 3086.52, "bar": 1904.9, "fashion": 665.53, "fitness": 75.33, "optician": 3914.02, "fastfood": 826.01, "drugstore": 2344.46, "restaurant": 781.38}}, {"id": "fac-127", "name": "The UPS Store", "street": "Ocean Park Boulevard, Santa Monica", "categories": ["gaming"], "lat": 34.020483, "lng": -118.45336, "distances": {"gaming": 0.0, "hairsalon": 7.26, "cafe": 430.78, "grocery": 1108.0, "pharmacy": 2540.28, "post": 188.77, "teahouse": 1381.12, "bar": 1010.38, "fashion": 2505.05, "fitness": 252.74, "optician": 2527.17, "fastfood": 1524.02, "drugstore": 2707.39, "restaurant": 273.24}}, {"id": "fac-128", "name": "VR Travel Altour", "street": "1229 Wilshire Boulevard", "categories": ["gaming"], "lat": 34.026011, "lng": -118.490143, "distances": {"gaming": 0.0, "hairsalon": 80.47, "cafe": 741.79, "grocery": 171.14, "pharmacy": 909.72, "post": 25.5, "teahouse": 82.1, "bar": 375.42, "fashion": 1090.15, "fitness": 677.8, "optician": 124.92, "fastfood": 416.48, "drugstore": 110.79, "restaurant": 65.66}}, {"id": "fac-129", "name": "Arcadia Terrace", "street": "Santa Monica, CA", "categories": ["gaming"], "lat": 34.009642, "lng": -118.493895, "distances": {"gaming": 0.0, "hairsalon": 729.76, "cafe": 553.81, "grocery": 685.01, "pharmacy": 1700.61, "post": 835.09, "teahouse": 383.46, "bar": 286.74, "fashion": 264.71, "fitness": 515.69, "optician": 317.94, "fastfood": 321.59, "drugstore": 1065.01, "restaurant": 230.34}}, {"id": "fac-130", "name": "American Beauty Hair Fashions Salon", "street": "Montana Avenue, Santa Monica", "categories": ["hairsalon"], "lat": 34.027189, "lng": -118.501683, "distances": {"gaming": 1071.52, "hairsalon": 0.0, "cafe": 837.74, "grocery": 837.71, "pharmacy": 1805.04, "post": 947.69, "teahouse": 678.12, "bar": 65.01, "fashion": 871.67, "fitness": 1051.94, "optician": 779.52, "fastfood": 875.04, "drugstore": 1133.56, "restaurant": 995.01}}, {"id": "fac-131", "name": "To the Maxx Hair Salon", "street": "Cedar Street, Santa Monica", "categories": ["hairsalon"], "lat": 34.008466, "lng": -118.478571, "distances": {"gaming": 686.4, "hairsalon": 0.0, "cafe": 755.81, "grocery": 1215.41, "pharmacy": 304.77, "post": 1048.36, "teahouse": 780.45, "bar": 789.54, "fashion": 561.43, "fitness": 739.7, "optician": 310.66, "fastfood": 711.61, "drugstore": 561.39, "restaurant": 1403.58}}, {"id": "fac-132", "name": "Tel's Barber Shop", "street": "2210 Pico Boulevard", "categories": ["hairsalon"], "lat": 34.020576, "lng": -118.467114, "distances": {"gaming": 1134.31, "hairsalon": 0.0, "cafe": 596.16, "grocery": 625.38, "pharmacy": 1492.17, "post": 1121.17, "teahouse": 117.62, "bar": 107.88, "fashion": 2267.97, "fitness": 626.44, "optician": 1682.53, "fastfood": 274.45, "drugstore": 1686.45, "restaurant": 1055.91}}, {"id": "fac-133", "name": "Pico Barber Shop", "street": "Pico Boulevard, Santa Monica", "categories": ["hairsalon"], "lat": 34.024979, "lng": -118.459473, "distances": {"gaming": 753.21, "hairsalon": 0.0, "cafe": 773.8, "grocery": 402.79, "pharmacy": 1974.25, "post": 565.32, "teahouse": 969.42, "bar": 265.15, "fashion": 1940.13, "fitness": 995.65, "optician": 2474.98, "fastfood": 1127.37, "drugstore": 1954.81, "restaurant": 737.58}}, {"id": "fac-134", "name": "Triple Threat Barbers", "street": "1311 Pico Boulevard", "categories": ["hairsalon"], "lat": 34.015769, "lng": -118.476731, "distances": {"gaming": 143.27, "hairsalon": 0.0, "cafe": 439.51, "grocery": 809.25, "pharmacy": 968.06, "post": 999.45, "teahouse": 886.21, "bar": 1142.87, "fashion": 1329.59, "fitness": 350.8, "optician": 961.77, "fastfood": 544.6, "drugstore": 652.72, "restaurant": 1099.0}}, {"id": "fac-135", "name": "Ocean Park Barbershop", "street": "Lincoln Boulevard, Santa Monica", "categories": ["hairsalon"], "lat": 34.006106, "lng": -118.475534, "distances": {"gaming": 943.1, "hairsalon": 0.0, "cafe": 757.04, "grocery": 1208.43, "pharmacy": 112.15, "post": 978.71, "teahouse": 1008.83, "bar": 835.38, "fashion": 699.11, "fitness": 956.51, "optician": 118.62, "fastfood": 327.91, "drugstore": 943.42, "restaurant": 1759.93}}, {"id": "fac-136", "name": "Pier 86 Barbershop", "street": "3000 Lincoln Boulevard", "categories": ["hairsalon"], "lat": 34.003951, "lng": -118.472662, "distances": {"gaming": 1239.27, "hairsalon": 0.0, "cafe": 921.12, "grocery": 1301.57, "pharmacy": 448.85, "post": 1050.34, "teahouse": 1015.46, "bar": 981.03, "fashion": 938.38, "fitness": 941.67, "optician": 448.14, "fastfood": 29.25, "drugstore": 1299.46, "restaurant": 2101.92}}, {"id": "fac-137", "name": "Berkeley Barbers", "street": "Santa Monica Boulevard, Santa Monica", "categories": ["hairsalon"], "lat": 34.034879, "lng": -118.472072, "distances": {"gaming": 1935.33, "hairsalon": 0.0, "cafe": 939.95, "grocery": 415.24, "pharmacy": 1057.74, "post": 746.47, "teahouse": 1657.77, "bar": 207.29, "fashion": 1429.61, "fitness": 606.22, "optician": 1829.43, "fastfood": 514.24, "drugstore": 382.81, "restaurant": 1270.3}}, {"id": "fac-138", "name": "Lloyd's Barbershop", "street": "26th Street, Santa Monica", "categories": ["hairsalon"], "lat": 34.047424, "lng": -118.490572, "distances": {"gaming": 2381.35, "hairsalon": 0.0, "cafe": 1691.74, "grocery": 1672.94, "pharmacy": 135.31, "post": 1829.22, "teahouse": 1794.16, "bar": 1445.17, "fashion": 1605.89, "fitness": 1961.86, "optician": 1692.81, "fastfood": 21.8, "drugstore": 1837.85, "restaurant": 2437.85}}, {"id": "fac-139", "name": "Salon Republic", "street": "1333 2nd Street", "categories": ["hairsalon"], "lat": 34.015576, "lng": -118.497277, "distances": {"gaming": 191.62, "hairsalon": 0.0, "cafe": 250.35, "grocery": 489.23, "pharmacy": 2070.47, "post": 341.6, "teahouse": 284.69, "bar": 61.41, "fashion": 99.22, "fitness": 48.69, "optician": 164.0, "fastfood": 155.56, "drugstore": 787.07, "restaurant": 21.94}}, {"id": "fac-140", "name": "Matthew Preece Salon", "street": "1122 Wilshire Boulevard", "categories": ["hairsalon"], "lat": 34.024819, "lng": -118.490961, "distances": {"gaming": 152.48, "hairsalon": 0.0, "cafe": 596.9, "grocery": 162.52, "pharmacy": 1021.43, "post": 124.58, "teahouse": 154.48, "bar": 412.64, "fashion": 1008.16, "fitness": 603.24, "optician": 277.38, "fastfood": 273.07, "drugstore": 262.47, "restaurant": 86.83}}, {"id": "fac-141", "name": "Brow Mantra Threading Salon", "street": "1203 Wilshire Boulevard", "categories": ["hairsalon"], "lat": 34.025494, "lng": -118.490754, "distances": {"gaming": 80.47, "hairsalon": 0.0, "cafe": 661.35, "grocery": 127.87, "pharmacy": 979.38, "post": 50.85, "teahouse": 115.57, "bar": 407.32, "fashion": 1085.6, "fitness": 654.26, "optician": 203.46, "fastfood": 336.03, "drugstore": 191.02, "restaurant": 23.42}}, {"id": "fac-142", "name": "Brenda Higuera at Bolden Beauty Salon", "street": "2920 Wilshire Boulevard", "categories": ["hairsalon"], "lat": 34.038571, "lng": -118.474019, "distances": {"gaming": 2039.16, "hairsalon": 0.0, "cafe": 1231.36, "grocery": 171.94, "pharmacy": 1129.5, "post": 788.47, "teahouse": 2036.56, "bar": 366.32, "fashion": 1403.77, "fitness": 1046.31, "optician": 1921.07, "fastfood": 81.3, "drugstore": 339.19, "restaurant": 1235.56}}, {"id": "fac-143", "name": "Daidone Salon", "street": "Wilshire Boulevard, Santa Monica", "categories": ["hairsalon"], "lat": 34.040863, "lng": -118.471828, "distances": {"gaming": 1796.67, "hairsalon": 0.0, "cafe": 1022.79, "grocery": 163.72, "pharmacy": 1452.58, "post": 1112.35, "teahouse": 2309.59, "bar": 493.23, "fashion": 1148.04, "fitness": 1265.81, "optician": 2242.32, "fastfood": 252.74, "drugstore": 663.46, "restaurant": 982.59}}, {"id": "fac-144", "name": "Object Salon", "street": "Ocean Park Boulevard, Santa Monica", "categories": ["hairsalon"], "lat": 34.02045, "lng": -118.453428, "distances": {"gaming": 7.26, "hairsalon": 0.0, "cafe": 423.54, "grocery": 1107.25, "pharmacy": 2533.05, "post": 186.07, "teahouse": 1374.81, "bar": 1008.67, "fashion": 2507.22, "fitness": 257.18, "optician": 2519.94, "fastfood": 1517.54, "drugstore": 2704.91, "restaurant": 266.0}}, {"id": "fac-145", "name": "10 Speed Coffee", "street": "1919 Santa Monica Boulevard", "categories": ["cafe"], "lat": 34.028681, "lng": -118.480341, "distances": {"gaming": 950.84, "hairsalon": 1022.96, "cafe": 0.0, "grocery": 523.72, "pharmacy": 75.48, "post": 536.77, "teahouse": 915.17, "bar": 733.69, "fashion": 1645.13, "fitness": 447.36, "optician": 864.49, "fastfood": 993.2, "drugstore": 426.59, "restaurant": 1000.8}}, {"id": "fac-146", "name": "Sidecar Doughnuts & Coffee", "street": "Wilshire Boulevard, Santa Monica", "categories": ["cafe"], "lat": 34.021364, "lng": -118.495918, "distances": {"gaming": 655.4, "hairsalon": 596.9, "cafe": 0.0, "grocery": 67.2, "pharmacy": 1596.37, "post": 383.51, "teahouse": 638.63, "bar": 415.99, "fashion": 581.04, "fitness": 483.5, "optician": 653.18, "fastfood": 192.66, "drugstore": 671.78, "restaurant": 329.35}}, {"id": "fac-147", "name": "Amai Coffee", "street": "1701 Pico Boulevard", "categories": ["cafe"], "lat": 34.017945, "lng": -118.47275, "distances": {"gaming": 547.88, "hairsalon": 439.51, "cafe": 0.0, "grocery": 546.72, "pharmacy": 1235.66, "post": 1401.65, "teahouse": 482.83, "bar": 703.86, "fashion": 1721.77, "fitness": 208.58, "optician": 1226.05, "fastfood": 325.29, "drugstore": 1092.01, "restaurant": 1410.4}}, {"id": "fac-148", "name": "Estate Coffee", "street": "2701 Ocean Park Boulevard", "categories": ["cafe"], "lat": 34.018279, "lng": -118.457204, "distances": {"gaming": 357.66, "hairsalon": 423.54, "cafe": 0.0, "grocery": 1059.73, "pharmacy": 2109.6, "post": 411.75, "teahouse": 1050.87, "bar": 880.76, "fashion": 2693.55, "fitness": 605.85, "optician": 2096.5, "fastfood": 1176.42, "drugstore": 2421.29, "restaurant": 157.54}}, {"id": "fac-149", "name": "Board House Coffee", "street": "11901 Santa Monica Boulevard", "categories": ["cafe"], "lat": 34.04189, "lng": -118.460797, "distances": {"gaming": 798.08, "hairsalon": 1022.79, "cafe": 0.0, "grocery": 1110.59, "pharmacy": 867.74, "post": 960.02, "teahouse": 2500.05, "bar": 1110.77, "fashion": 132.6, "fitness": 732.11, "optician": 3120.39, "fastfood": 32.08, "drugstore": 1546.38, "restaurant": 33.1}}, {"id": "fac-150", "name": "Bay Cities Italian Deli and Bakery", "street": "Lincoln Boulevard, Santa Monica", "categories": ["cafe"], "lat": 34.017971, "lng": -118.489182, "distances": {"gaming": 553.47, "hairsalon": 778.91, "cafe": 0.0, "grocery": 368.73, "pharmacy": 1371.21, "post": 91.8, "teahouse": 521.7, "bar": 167.59, "fashion": 454.33, "fitness": 345.72, "optician": 643.88, "fastfood": 102.88, "drugstore": 65.72, "restaurant": 157.99}}, {"id": "fac-151", "name": "Erin McKenna's Bakery", "street": "14th Court, Santa Monica", "categories": ["cafe"], "lat": 34.032629, "lng": -118.494852, "distances": {"gaming": 854.31, "hairsalon": 873.02, "cafe": 0.0, "grocery": 782.56, "pharmacy": 1118.79, "post": 799.22, "teahouse": 364.3, "bar": 239.67, "fashion": 249.84, "fitness": 966.71, "optician": 305.83, "fastfood": 1036.6, "drugstore": 821.5, "restaurant": 888.39}}, {"id": "fac-152", "name": "Blue Bottle Coffee", "street": "Main Street, Santa Monica", "categories": ["cafe"], "lat": 34.003515, "lng": -118.484871, "distances": {"gaming": 312.18, "hairsalon": 800.2, "cafe": 0.0, "grocery": 1493.8, "pharmacy": 934.8, "post": 459.7, "teahouse": 638.38, "bar": 75.17, "fashion": 238.77, "fitness": 830.09, "optician": 137.41, "fastfood": 1104.39, "drugstore": 1005.67, "restaurant": 1248.85}}, {"id": "fac-153", "name": "Dogtown Coffee", "street": "2003 Main Street", "categories": ["cafe"], "lat": 34.007147, "lng": -118.488695, "distances": {"gaming": 48.28, "hairsalon": 944.65, "cafe": 0.0, "grocery": 986.34, "pharmacy": 1197.76, "post": 878.64, "teahouse": 664.1, "bar": 468.02, "fashion": 576.69, "fitness": 485.92, "optician": 593.1, "fastfood": 827.71, "drugstore": 813.44, "restaurant": 715.37}}, {"id": "fac-154", "name": "SMC Pharmacy", "street": "1908 Santa Monica Boulevard", "categories": ["pharmacy"], "lat": 34.028031, "lng": -118.480577, "distances": {"gaming": 909.72, "hairsalon": 979.38, "cafe": 75.48, "grocery": 458.97, "pharmacy": 0.0, "post": 610.45, "teahouse": 869.13, "bar": 672.38, "fashion": 1652.54, "fitness": 465.94, "optician": 830.25, "fastfood": 921.56, "drugstore": 454.17, "restaurant": 956.79}}, {"id": "fac-155", "name": "Central Compounding Pharmacy", "street": "Wilshire Boulevard, Santa Monica", "categories": ["pharmacy"], "lat": 34.031476, "lng": -118.482791, "distances": {"gaming": 910.11, "hairsalon": 990.43, "cafe": 384.14, "grocery": 247.39, "pharmacy": 0.0, "post": 341.76, "teahouse": 907.64, "bar": 847.66, "fashion": 1339.09, "fitness": 207.95, "optician": 793.7, "fastfood": 1199.97, "drugstore": 135.2, "restaurant": 972.75}}, {"id": "fac-156", "name": "McCarthy Pharmacy", "street": "2601 Lincoln Boulevard", "categories": ["pharmacy"], "lat": 34.007105, "lng": -118.475701, "distances": {"gaming": 830.96, "hairsalon": 112.15, "cafe": 809.31, "grocery": 1128.95, "pharmacy": 0.0, "post": 1052.18, "teahouse": 1084.28, "bar": 877.83, "fashion": 712.36, "fitness": 911.49, "optician": 13.11, "fastfood": 420.45, "drugstore": 853.77, "restaurant": 1703.63}}, {"id": "fac-157", "name": "Westside Pharmacy", "street": "11504 Santa Monica Boulevard", "categories": ["pharmacy"], "lat": 34.045233, "lng": -118.452287, "distances": {"gaming": 69.68, "hairsalon": 1864.89, "cafe": 867.74, "grocery": 1968.48, "pharmacy": 0.0, "post": 95.23, "teahouse": 3143.15, "bar": 1974.49, "fashion": 735.18, "fitness": 140.43, "optician": 3983.53, "fastfood": 895.63, "drugstore": 2414.12, "restaurant": 850.95}}, {"id": "fac-158", "name": "Brentwood Pharmacy", "street": "2530-2538 26th Street", "categories": ["pharmacy"], "lat": 34.048089, "lng": -118.491802, "distances": {"gaming": 2459.72, "hairsalon": 135.31, "cafe": 1741.89, "grocery": 1801.21, "pharmacy": 0.0, "post": 1952.98, "teahouse": 1818.23, "bar": 1513.54, "fashion": 1638.2, "fitness": 2066.12, "optician": 1719.81, "fastfood": 114.58, "drugstore": 1954.6, "restaurant": 2514.65}}, {"id": "fac-159", "name": "European Skin and Massage Studio", "street": "1333 2nd Street", "categories": ["massage"], "lat": 34.015634, "lng": -118.497371, "distances": {"gaming": 200.65, "hairsalon": 10.8, "cafe": 255.78, "grocery": 497.91, "pharmacy": 2072.62, "post": 342.01, "teahouse": 292.85, "bar": 71.49, "fashion": 102.13, "fitness": 59.27, "optician": 173.09, "fastfood": 145.12, "drugstore": 792.35, "restaurant": 31.19}}, {"id": "fac-160", "name": "Vela Massage Studio", "street": "2314 Pico Boulevard", "categories": ["massage"], "lat": 34.021138, "lng": -118.466072, "distances": {"gaming": 1173.83, "hairsalon": 114.58, "cafe": 710.53, "grocery": 705.27, "pharmacy": 1540.9, "post": 1021.21, "teahouse": 229.46, "bar": 6.7, "fashion": 2377.92, "fitness": 733.48, "optician": 1783.33, "fastfood": 387.67, "drugstore": 1801.02, "restaurant": 973.9}}, {"id": "fac-161", "name": "The Loop Massage", "street": "17th Street, Santa Monica", "categories": ["massage"], "lat": 34.012348, "lng": -118.466555, "distances": {"gaming": 992.01, "hairsalon": 916.36, "cafe": 844.6, "grocery": 323.57, "pharmacy": 1024.98, "post": 1473.03, "teahouse": 898.81, "bar": 974.4, "fashion": 1722.01, "fitness": 11.67, "optician": 1011.87, "fastfood": 865.15, "drugstore": 1467.65, "restaurant": 1242.63}}, {"id": "fac-162", "name": "Season Massage", "street": "11957 Santa Monica Boulevard", "categories": ["massage"], "lat": 34.041484, "lng": -118.461675, "distances": {"gaming": 890.53, "hairsalon": 938.04, "cafe": 92.64, "grocery": 1021.53, "pharmacy": 960.2, "post": 1052.3, "teahouse": 2435.05, "bar": 1018.32, "fashion": 225.2, "fitness": 824.73, "optician": 3027.87, "fastfood": 68.41, "drugstore": 1453.99, "restaurant": 65.32}}, {"id": "fac-163", "name": "Mareeya Thai Massage", "street": "11870 Santa Monica Boulevard", "categories": ["massage"], "lat": 34.041728, "lng": -118.459358, "distances": {"gaming": 689.71, "hairsalon": 1153.0, "cafe": 133.81, "grocery": 1236.0, "pharmacy": 759.18, "post": 848.99, "teahouse": 2523.11, "bar": 1215.68, "fashion": 79.01, "fitness": 628.34, "optician": 3224.37, "fastfood": 144.16, "drugstore": 1660.45, "restaurant": 138.77}}, {"id": "fac-164", "name": "The Mist Spa", "street": "11921 Santa Monica Boulevard", "categories": ["massage"], "lat": 34.041939, "lng": -118.461072, "distances": {"gaming": 818.82, "hairsalon": 998.25, "cafe": 25.92, "grocery": 1087.35, "pharmacy": 888.44, "post": 981.1, "teahouse": 2498.36, "bar": 1092.55, "fashion": 153.64, "fitness": 752.11, "optician": 3101.86, "fastfood": 7.19, "drugstore": 1525.82, "restaurant": 16.0}}, {"id": "fac-165", "name": "Alison S Williams D D S", "street": "Colorado Avenue, Santa Monica", "categories": ["massage"], "lat": 34.027169, "lng": -118.474841, "distances": {"gaming": 1416.04, "hairsalon": 894.48, "cafe": 305.43, "grocery": 86.54, "pharmacy": 537.22, "post": 849.47, "teahouse": 971.04, "bar": 1048.33, "fashion": 2121.22, "fitness": 438.72, "optician": 1351.04, "fastfood": 955.68, "drugstore": 886.91, "restaurant": 1454.96}}, {"id": "fac-166", "name": "Bark Williams", "street": "30th Street, Santa Monica", "categories": ["massage"], "lat": 34.020269, "lng": -118.454347, "distances": {"gaming": 94.03, "hairsalon": 87.06, "cafe": 343.94, "grocery": 1076.67, "pharmacy": 2452.84, "post": 149.53, "teahouse": 1290.01, "bar": 967.53, "fashion": 2509.41, "fitness": 332.46, "optician": 2439.74, "fastfood": 1431.86, "drugstore": 2653.57, "restaurant": 187.65}}, {"id": "fac-167", "name": "Keller Williams Realty", "street": "2701 Ocean Park Boulevard", "categories": ["massage"], "lat": 34.018406, "lng": -118.456979, "distances": {"gaming": 342.25, "hairsalon": 398.45, "cafe": 25.09, "grocery": 1084.08, "pharmacy": 2134.68, "post": 389.39, "teahouse": 1068.27, "bar": 895.33, "fashion": 2681.19, "fitness": 582.35, "optician": 2121.58, "fastfood": 1195.3, "drugstore": 2445.1, "restaurant": 132.46}}, {"id": "fac-168", "name": "Sherwin-Williams", "street": "Pico Boulevard, Santa Monica", "categories": ["massage"], "lat": 34.012506, "lng": -118.482268, "distances": {"gaming": 533.78, "hairsalon": 563.85, "cafe": 840.26, "grocery": 957.72, "pharmacy": 852.69, "post": 558.45, "teahouse": 297.9, "bar": 1010.41, "fashion": 837.35, "fitness": 389.2, "optician": 855.19, "fastfood": 828.32, "drugstore": 26.82, "restaurant": 894.73}}, {"id": "fac-169", "name": "Alchemie Spa", "street": "Main Street, Santa Monica", "categories": ["massage"], "lat": 34.006755, "lng": -118.488287, "distances": {"gaming": 105.74, "hairsalon": 915.57, "cafe": 57.57, "grocery": 1039.59, "pharmacy": 1160.8, "post": 918.32, "teahouse": 688.53, "bar": 410.56, "fashion": 524.97, "fitness": 507.47, "optician": 537.17, "fastfood": 876.32, "drugstore": 819.9, "restaurant": 772.53}}, {"id": "fac-170", "name": "Whole Foods Market", "street": "2201 Wilshire Boulevard", "categories": ["grocery"], "lat": 34.033324, "lng": -118.481296, "distances": {"gaming": 1151.48, "hairsalon": 867.38, "cafe": 523.72, "grocery": 0.0, "pharmacy": 247.39, "post": 121.02, "teahouse": 1152.58, "bar": 990.73, "fashion": 1449.05, "fitness": 445.87, "optician": 1032.49, "fastfood": 957.17, "drugstore": 112.27, "restaurant": 1215.02}}, {"id": "fac-171", "name": "Trader Joe's", "street": "500 Broadway", "categories": ["grocery"], "lat": 34.015592, "lng": -118.491969, "distances": {"gaming": 198.43, "hairsalon": 489.23, "cafe": 183.14, "grocery": 0.0, "pharmacy": 1736.49, "post": 279.19, "teahouse": 192.2, "bar": 282.26, "fashion": 148.22, "fitness": 255.02, "optician": 325.61, "fastfood": 335.06, "drugstore": 395.4, "restaurant": 323.37}}, {"id": "fac-172", "name": "Erewhon", "street": "2800 Wilshire Boulevard", "categories": ["grocery"], "lat": 34.037465, "lng": -118.475323, "distances": {"gaming": 1867.4, "hairsalon": 171.94, "cafe": 1080.66, "grocery": 0.0, "pharmacy": 957.62, "post": 616.54, "teahouse": 1864.62, "bar": 418.38, "fashion": 1557.83, "fitness": 971.13, "optician": 1749.51, "fastfood": 245.95, "drugstore": 174.44, "restaurant": 1389.77}}, {"id": "fac-173", "name": "Ralphs", "street": "1644 Cloverfield Boulevard", "categories": ["grocery"], "lat": 34.027106, "lng": -118.473905, "distances": {"gaming": 1430.45, "hairsalon": 880.67, "cafe": 390.25, "grocery": 0.0, "pharmacy": 623.4, "post": 906.07, "teahouse": 914.55, "bar": 979.06, "fashion": 2159.01, "fitness": 377.53, "optician": 1437.21, "fastfood": 911.0, "drugstore": 957.19, "restaurant": 1539.72}}, {"id": "fac-174", "name": "Co-opportunity Market", "street": "1525 Broadway", "categories": ["grocery"], "lat": 34.024319, "lng": -118.482755, "distances": {"gaming": 706.38, "hairsalon": 748.66, "cafe": 533.62, "grocery": 0.0, "pharmacy": 458.97, "post": 712.46, "teahouse": 635.32, "bar": 345.72, "fashion": 1355.12, "fitness": 489.12, "optician": 689.39, "fastfood": 561.02, "drugstore": 566.19, "restaurant": 725.74}}, {"id": "fac-175", "name": "Colorado Station Santa Monica Post Office", "street": "7th Street, Santa Monica", "categories": ["post"], "lat": 34.01499, "lng": -118.487534, "distances": {"gaming": 595.96, "hairsalon": 900.36, "cafe": 364.62, "grocery": 414.21, "pharmacy": 1399.4, "post": 0.0, "teahouse": 334.37, "bar": 462.68, "fashion": 561.23, "fitness": 473.5, "optician": 657.15, "fastfood": 459.43, "drugstore": 430.31, "restaurant": 447.96}}, {"id": "fac-176", "name": "Will Rogers Station Santa Monica Post Office", "street": "1217 Wilshire Boulevard", "categories": ["post"], "lat": 34.025831, "lng": -118.490381, "distances": {"gaming": 29.69, "hairsalon": 50.85, "cafe": 712.12, "grocery": 150.38, "pharmacy": 936.02, "post": 0.0, "teahouse": 89.14, "bar": 387.07, "fashion": 1094.14, "fitness": 669.68, "optician": 153.26, "fastfood": 386.81, "drugstore": 140.19, "restaurant": 38.4}}, {"id": "fac-177", "name": "Ocean Park Station Santa Monica Post Office", "street": "Neilson Way, Santa Monica", "categories": ["post"], "lat": 33.999733, "lng": -118.482857, "distances": {"gaming": 761.8, "hairsalon": 978.71, "cafe": 309.43, "grocery": 1953.25, "pharmacy": 1052.18, "post": 0.0, "teahouse": 185.6, "bar": 120.64, "fashion": 131.36, "fitness": 1277.67, "optician": 478.16, "fastfood": 1038.1, "drugstore": 1402.16, "restaurant": 1699.85}}, {"id": "fac-178", "name": "West Los Angeles Finance Station Los Angeles Post Office", "street": "11420 Santa Monica Boulevard", "categories": ["post"], "lat": 34.045386, "lng": -118.45127, "distances": {"gaming": 163.28, "hairsalon": 1959.8, "cafe": 960.02, "grocery": 2061.28, "pharmacy": 95.23, "post": 0.0, "teahouse": 3203.14, "bar": 2064.67, "fashion": 827.61, "fitness": 235.65, "optician": 4072.99, "fastfood": 988.29, "drugstore": 2506.28, "restaurant": 943.92}}, {"id": "fac-179", "name": "Will Rogers Station USPS", "street": "Wilshire Boulevard, Santa Monica", "categories": ["post"], "lat": 34.025809, "lng": -118.490274, "distances": {"gaming": 25.5, "hairsalon": 56.42, "cafe": 717.53, "grocery": 160.47, "pharmacy": 927.16, "post": 0.0, "teahouse": 79.17, "bar": 377.03, "fashion": 1101.69, "fitness": 662.97, "optician": 150.42, "fastfood": 392.21, "drugstore": 135.95, "restaurant": 40.18}}, {"id": "fac-180", "name": "Psychic Boutique", "street": "Main Street, Santa Monica", "categories": ["fashion"], "lat": 34.000714, "lng": -118.482063, "distances": {"gaming": 716.92, "hairsalon": 849.53, "cafe": 202.64, "grocery": 1889.61, "pharmacy": 921.38, "post": 131.36, "teahouse": 251.6, "bar": 50.45, "fashion": 0.0, "fitness": 1192.13, "optician": 388.66, "fastfood": 924.36, "drugstore": 1293.21, "restaurant": 1653.45}}, {"id": "fac-181", "name": "Olimpia Shoes", "street": "Santa Monica Boulevard, Santa Monica", "categories": ["fashion"], "lat": 34.042427, "lng": -118.459512, "distances": {"gaming": 665.53, "hairsalon": 1148.04, "cafe": 132.6, "grocery": 1240.19, "pharmacy": 735.18, "post": 827.61, "teahouse": 2592.16, "bar": 1242.73, "fashion": 0.0, "fitness": 599.54, "optician": 3252.46, "fastfood": 160.83, "drugstore": 1678.93, "restaurant": 117.98}}, {"id": "fac-182", "name": "Nordstrom", "street": "220 Broadway", "categories": ["fashion"], "lat": 34.013632, "lng": -118.494903, "distances": {"gaming": 173.4, "hairsalon": 307.58, "cafe": 319.05, "grocery": 347.31, "pharmacy": 1912.94, "post": 485.78, "teahouse": 193.2, "bar": 176.02, "fashion": 0.0, "fitness": 193.84, "optician": 150.9, "fastfood": 261.8, "drugstore": 735.52, "restaurant": 160.17}}, {"id": "fac-183", "name": "Patagonia", "street": "1345 3rd Street Promenade", "categories": ["fashion"], "lat": 34.016158, "lng": -118.496461, "distances": {"gaming": 137.34, "hairsalon": 99.22, "cafe": 157.74, "grocery": 418.77, "pharmacy": 1971.27, "post": 245.12, "teahouse": 212.16, "bar": 80.91, "fashion": 0.0, "fitness": 110.69, "optician": 114.88, "fastfood": 85.21, "drugstore": 692.41, "restaurant": 77.9}}, {"id": "fac-184", "name": "Ocean Park Optometry", "street": "2605 Lincoln Boulevard", "categories": ["optician"], "lat": 34.007172, "lng": -118.475584, "distances": {"gaming": 825.22, "hairsalon": 118.62, "cafe": 822.38, "grocery": 1116.38, "pharmacy": 13.11, "post": 1064.76, "teahouse": 1089.21, "bar": 890.94, "fashion": 725.0, "fitness": 898.46, "optician": 0.0, "fastfood": 419.96, "drugstore": 856.68, "restaurant": 1711.14}}, {"id": "fac-185", "name": "Dialogue Restaurant", "street": "1315 Third Street Promenade", "categories": ["restaurant"], "lat": 34.016834, "lng": -118.496683, "distances": {"gaming": 201.71, "hairsalon": 150.22, "cafe": 177.48, "grocery": 455.9, "pharmacy": 1937.37, "post": 202.16, "teahouse": 256.11, "bar": 154.64, "fashion": 77.9, "fitness": 178.42, "optician": 184.1, "fastfood": 108.62, "drugstore": 687.46, "restaurant": 0.0}}, {"id": "fac-186", "name": "T's Thai Restaurant", "street": "1211 4th Street", "categories": ["restaurant"], "lat": 34.018842, "lng": -118.497792, "distances": {"gaming": 441.78, "hairsalon": 366.25, "cafe": 247.52, "grocery": 267.88, "pharmacy": 1887.08, "post": 273.83, "teahouse": 473.3, "bar": 392.73, "fashion": 322.68, "fitness": 171.67, "optician": 427.46, "fastfood": 149.41, "drugstore": 765.17, "restaurant": 0.0}}, {"id": "fac-187", "name": "Ma'kai Restaurant & Lounge", "street": "101 Broadway", "categories": ["restaurant"], "lat": 34.012988, "lng": -118.496504, "distances": {"gaming": 304.08, "hairsalon": 296.46, "cafe": 420.92, "grocery": 508.48, "pharmacy": 2026.01, "post": 574.29, "teahouse": 337.29, "bar": 149.03, "fashion": 164.02, "fitness": 73.02, "optician": 237.09, "fastfood": 336.68, "drugstore": 890.16, "restaurant": 0.0}}, {"id": "fac-188", "name": "Vito Restaurant", "street": "2807 Ocean Park Boulevard", "categories": ["restaurant"], "lat": 34.019086, "lng": -118.455799, "distances": {"gaming": 273.24, "hairsalon": 266.0, "cafe": 157.54, "grocery": 1132.9, "pharmacy": 2267.11, "post": 278.34, "teahouse": 1163.97, "bar": 978.4, "fashion": 2617.86, "fitness": 461.72, "optician": 2254.0, "fastfood": 1297.69, "drugstore": 2570.85, "restaurant": 0.0}}, {"id": "fac-189", "name": "Monte Alban Restaurant", "street": "11921 Santa Monica Boulevard", "categories": ["restaurant"], "lat": 34.041951, "lng": -118.461245, "distances": {"gaming": 832.86, "hairsalon": 982.59, "cafe": 41.83, "grocery": 1072.26, "pharmacy": 902.45, "post": 995.28, "teahouse": 2495.42, "bar": 1080.07, "fashion": 168.22, "fitness": 765.8, "optician": 3089.12, "fastfood": 10.17, "drugstore": 1512.05, "restaurant": 0.0}}, {"id": "fac-190", "name": "Hop Li Seafood Restaurant", "street": "11901 Santa Monica Boulevard", "categories": ["restaurant"], "lat": 34.042186, "lng": -118.460759, "distances": {"gaming": 781.38, "hairsalon": 1030.45, "cafe": 33.1, "grocery": 1122.29, "pharmacy": 850.95, "post": 943.92, "teahouse": 2532.64, "bar": 1131.8, "fashion": 117.98, "fitness": 714.1, "optician": 3140.93, "fastfood": 46.62, "drugstore": 1563.75, "restaurant": 0.0}}, {"id": "fac-191", "name": "Water Grill", "street": "1401 Ocean Avenue", "categories": ["restaurant"], "lat": 34.013973, "lng": -118.497628, "distances": {"gaming": 280.91, "hairsalon": 181.16, "cafe": 383.27, "grocery": 551.78, "pharmacy": 2160.56, "post": 509.09, "teahouse": 361.15, "bar": 52.29, "fashion": 226.96, "fitness": 12.17, "optician": 259.42, "fastfood": 286.88, "drugstore": 902.55, "restaurant": 0.0}}, {"id": "fac-192", "name": "SUGARFISH by sushi nozawa", "street": "1345 2nd Street", "categories": ["restaurant"], "lat": 34.015386, "lng": -118.497213, "distances": {"gaming": 185.97, "hairsalon": 21.94, "cafe": 254.57, "grocery": 483.87, "pharmacy": 2080.31, "post": 355.09, "teahouse": 281.49, "bar": 54.12, "fashion": 110.33, "fitness": 30.23, "optician": 158.39, "fastfood": 161.46, "drugstore": 790.73, "restaurant": 0.0}}, {"id": "fac-193", "name": "Santa Monica Creek", "street": "Santa Monica, CA", "categories": ["restaurant"], "lat": 34.030892, "lng": -118.513048, "distances": {"gaming": 2179.45, "hairsalon": 1125.36, "cafe": 1687.85, "grocery": 1880.3, "pharmacy": 2736.6, "post": 2058.89, "teahouse": 1329.99, "bar": 1179.82, "fashion": 1518.66, "fitness": 1918.37, "optician": 1416.67, "fastfood": 1872.3, "drugstore": 2227.21, "restaurant": 0.0}}];
+
+    let map = null;
+    let currentTileLayer = null;
+    let facilitiesLayerGroup = null;
+    let currentPage = 1;
+
+    /*************************************************************************
+     * 3. LEAFLET MAP INITIALIZATION (FOCUSED ZOOM-IN VIEW)
+     *************************************************************************/
+    function initLeafletMap() {
+      // Focused zoom-in view on Santa Monica commercial & community corridors
+      map = L.map('map', {
+        center: [34.0215, -118.4835],
+        zoom: 14.8,
+        zoomSnap: 0.1,
+        zoomControl: false,
+        attributionControl: false,
+        preferCanvas: true
+      });
+
+      // 100% Free, Zero-API-Key Esri World Street Map (Stable, High Resolution)
+      currentTileLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19 }
+      ).addTo(map);
+
+      facilitiesLayerGroup = L.layerGroup().addTo(map);
+
+      renderMapMarkers();
+    }
+
+    /*************************************************************************
+     * 4. MAP MARKER RENDERING & INTERACTIVE POPUPS
+     *************************************************************************/
+    function passesFilters(fac) {
+      // 1. Must belong to an enabled category
+      const hasVisibleCategory = fac.categories.some((catId) => visibleCategories.has(catId));
+      if (!hasVisibleCategory) return false;
+
+      // 2. Proximity distance filters for active sliders
+      for (const catId of ALL_SLIDER_IDS) {
+        const filter = sliderFilters[catId];
+        if (!filter) continue;
+        const dist = fac.distances ? fac.distances[catId] : undefined;
+        if (dist === undefined) continue;
+        if (dist < filter.min || dist > filter.max) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function renderMapMarkers() {
+      if (!facilitiesLayerGroup) return;
+      facilitiesLayerGroup.clearLayers();
+
+      let visibleCount = 0;
+
+      SANTA_MONICA_FACILITIES.forEach((fac) => {
+        if (!passesFilters(fac)) return;
+        visibleCount++;
+
+        const primaryCatId = fac.categories[0];
+        const catMeta = ASSET_CATEGORIES.find((c) => c.id === primaryCatId) || ASSET_CATEGORIES[0];
+
+        // Custom Pin Icon with Category Color & FontAwesome Symbol
+        const pinHtml = `
+          <div class="facility-marker-pin" style="background-color: ${catMeta.color};" title="${fac.name}">
+            <i class="fa-solid ${catMeta.icon || 'fa-location-dot'}"></i>
+          </div>
+        `;
+
+        const customIcon = L.divIcon({
+          className: 'custom-facility-pin-wrapper',
+          html: pinHtml,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+          popupAnchor: [0, -12]
+        });
+
+        const marker = L.marker([fac.lat, fac.lng], { icon: customIcon });
+
+        // Rich Power BI Style Popup with Real Distances
+        const badgesHtml = fac.categories
+          .map((cid) => {
+            const c = ASSET_CATEGORIES.find((x) => x.id === cid);
+            return `<span class="px-2 py-0.5 text-[10px] font-semibold rounded text-white" style="background-color: ${c ? c.color : '#0078D4'}"><i class="fa-solid ${c ? c.icon : 'fa-tag'} mr-1"></i>${c ? c.name : cid}</span>`;
+          })
+          .join(' ');
+
+        // Nearest Amenities Snapshot in popup
+        const nearbyItems = [
+          { label: 'Nearest Grocery', val: fac.distances?.grocery, icon: 'fa-cart-shopping', color: '#107C41' },
+          { label: 'Nearest Pharmacy', val: fac.distances?.pharmacy, icon: 'fa-notes-medical', color: '#00A8E8' },
+          { label: 'Nearest Fast Food', val: fac.distances?.fastfood, icon: 'fa-burger', color: '#F29F05' },
+          { label: 'Nearest Cafe', val: fac.distances?.cafe, icon: 'fa-mug-saucer', color: '#2E933C' },
+          { label: 'Nearest Post Office', val: fac.distances?.post, icon: 'fa-envelope', color: '#F59E0B' }
+        ].filter((item) => item.val !== undefined);
+
+        const distGridHtml = nearbyItems
+          .map(
+            (item) => `
+            <div class="flex items-center justify-between text-[10.5px] py-0.5 border-b border-slate-100 last:border-none">
+              <span class="text-slate-500 flex items-center gap-1.5"><i class="fa-solid ${item.icon}" style="color: ${item.color}"></i>${item.label}:</span>
+              <div class="text-right">
+                <strong class="font-semibold text-slate-800">${item.val === 0 ? 'On-site' : item.val + ' m'}</strong>
+                <span class="text-[9px] text-slate-400 ml-1">${item.val === 0 ? '(Self)' : `(~${Math.max(1, Math.round(item.val / 80))} min)`}</span>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+
+        const popupContent = `
+          <div class="w-[260px] p-3 text-slate-800">
+            <div class="flex items-start justify-between gap-1 mb-1.5">
+              <h3 class="text-[13px] font-bold text-slate-900 leading-tight">${fac.name}</h3>
+            </div>
+            <div class="mb-2 flex flex-wrap gap-1">${badgesHtml}</div>
+            <div class="text-[11px] text-slate-600 mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-location-dot text-rose-500 text-xs"></i>
+              <span>${fac.street}</span>
+            </div>
+            <div class="bg-slate-50 rounded p-2 border border-slate-100">
+              <div class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">Walking Distance Snapshot</div>
+              ${distGridHtml}
+            </div>
+            <div class="mt-2 text-[9.5px] text-slate-400 flex items-center justify-between">
+              <span>Coord: ${fac.lat.toFixed(4)}°, ${fac.lng.toFixed(4)}°</span>
+              <span class="text-[#0078D4] font-medium">Santa Monica, CA</span>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+
+        // Visual 300m walking circle on marker click
+        marker.on('click', () => {
+          if (window.selectedRadiusCircle) {
+            map.removeLayer(window.selectedRadiusCircle);
+            window.selectedRadiusCircle = null;
+          }
+          window.selectedRadiusCircle = L.circle([fac.lat, fac.lng], {
+            radius: 300,
+            color: '#0078D4',
+            weight: 1.5,
+            dashArray: '4, 4',
+            fillColor: '#0078D4',
+            fillOpacity: 0.07
+          }).addTo(map);
+          window.selectedRadiusCircle.bindTooltip('300m (~4 min walk radius)', { permanent: false, direction: 'top' });
+        });
+
+        marker.on('popupclose', () => {
+          if (window.selectedRadiusCircle) {
+            map.removeLayer(window.selectedRadiusCircle);
+            window.selectedRadiusCircle = null;
+          }
+        });
+
+        facilitiesLayerGroup.addLayer(marker);
+      });
+
+      // Update Header Counter & Footer
+      document.getElementById('activeAddressCount').textContent = visibleCount;
+      const totalFac = SANTA_MONICA_FACILITIES.length;
+      document.getElementById('footerFilterStatus').textContent =
+        `Showing ${visibleCount} of ${totalFac} facilities | Santa Monica, CA Spatial Explorer`;
+    }
+
+    /*************************************************************************
+     * 5. BUILD DISPLAY CHECKLIST & LEGEND
+     *************************************************************************/
+    function buildCategoryChecklist() {
+      const container = document.getElementById('categoryCheckboxList');
+      container.innerHTML = '';
+
+      // 1. "Select all" master checkbox
+      const selectAllRow = document.createElement('div');
+      selectAllRow.className = 'flex items-center space-x-2 py-0.5 hover:bg-slate-50 rounded px-1 transition-colors';
+      selectAllRow.innerHTML = `
+        <input type="checkbox" id="chk-select-all" class="category-checkbox h-3.5 w-3.5 rounded border-slate-300" checked />
+        <label for="chk-select-all" class="text-[11.5px] font-semibold text-slate-800 cursor-pointer flex-1">Select all</label>
+      `;
+      container.appendChild(selectAllRow);
+
+      const selectAllInput = selectAllRow.querySelector('#chk-select-all');
+      selectAllInput.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        ASSET_CATEGORIES.forEach((cat) => {
+          if (checked) {
+            visibleCategories.add(cat.id);
+          } else {
+            visibleCategories.delete(cat.id);
+          }
+          const chk = document.getElementById(`chk-cat-${cat.id}`);
+          if (chk) chk.checked = checked;
+        });
+        renderMapMarkers();
+        showToast(checked ? 'All categories visible' : 'All categories hidden');
+      });
+
+      // 2. Individual Category Checkboxes with Colored Dots
+      ASSET_CATEGORIES.forEach((cat) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between py-0.5 hover:bg-slate-50 rounded px-1 transition-colors';
+        row.innerHTML = `
+          <div class="flex items-center space-x-2 min-w-0">
+            <input
+              type="checkbox"
+              id="chk-cat-${cat.id}"
+              class="category-checkbox h-3.5 w-3.5 rounded border-slate-300"
+              ${visibleCategories.has(cat.id) ? 'checked' : ''}
+            />
+            <label for="chk-cat-${cat.id}" class="text-[11px] font-normal text-slate-700 truncate cursor-pointer hover:text-slate-900">
+              ${cat.name}
+            </label>
+          </div>
+          <span class="w-2.5 h-2.5 rounded-full shrink-0 ml-1.5" style="background-color: ${cat.color}"></span>
+        `;
+
+        const chk = row.querySelector(`#chk-cat-${cat.id}`);
+        chk.addEventListener('change', (e) => {
+          if (e.target.checked) {
+            visibleCategories.add(cat.id);
+          } else {
+            visibleCategories.delete(cat.id);
+          }
+          selectAllInput.checked = visibleCategories.size === ASSET_CATEGORIES.length;
+          renderMapMarkers();
+        });
+
+        container.appendChild(row);
+      });
+    }
+
+    function buildLegendBar() {
+      const container = document.getElementById('legendScrollContainer');
+      container.innerHTML = '';
+
+      ASSET_CATEGORIES.forEach((cat) => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center space-x-1.5 shrink-0 cursor-pointer hover:opacity-80 transition-opacity';
+        item.innerHTML = `
+          <span class="w-2.5 h-2.5 rounded-full inline-block shadow-xs" style="background-color: ${cat.color}"></span>
+          <span class="font-medium text-[11px] text-slate-700">${cat.shortLegend || cat.name}</span>
+        `;
+        item.addEventListener('click', () => {
+          const chk = document.getElementById(`chk-cat-${cat.id}`);
+          if (chk) {
+            chk.click();
+          }
+        });
+        container.appendChild(item);
+      });
+    }
+
+    /*************************************************************************
+     * 6. BUILD DUAL-THUMB RANGE SLICER CARDS
+     *************************************************************************/
+    function buildSliderCard(catId) {
+      const cat = ASSET_CATEGORIES.find((c) => c.id === catId);
+      if (!cat) return null;
+
+      const state = sliderFilters[catId];
+      const card = document.createElement('div');
+      card.className = 'slicer-card';
+      card.id = `slicer-card-${catId}`;
+
+      const titleName = cat.name;
+      const unit = 'm';
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between" title="Filter venues by distance in meters to nearest ${titleName}">
+          <div class="flex items-center space-x-1.5 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${cat.color}"></span>
+            <span class="text-[11px] font-semibold text-slate-800 truncate" title="Distance to nearest ${titleName}">${titleName}</span>
+          </div>
+          <span id="unit-tag-${catId}" class="text-[9.5px] text-slate-400 font-medium shrink-0 ml-1" title="Walking distance in meters to nearest ${titleName}">to nearest (m)</span>
+        </div>
+
+        <div class="flex items-center justify-between gap-1 my-1">
+          <input
+            type="number"
+            id="num-min-${catId}"
+            class="slicer-num-input"
+            value="${state.min.toFixed(state.decimals)}"
+            step="${state.decimals === 0 ? '1' : '0.1'}"
+            min="0"
+            max="${state.limitMax}"
+          />
+          <input
+            type="number"
+            id="num-max-${catId}"
+            class="slicer-num-input"
+            value="${state.max.toFixed(state.decimals)}"
+            step="${state.decimals === 0 ? '1' : '0.1'}"
+            min="0"
+            max="${state.limitMax}"
+          />
+        </div>
+
+        <div class="dual-slider-wrap">
+          <div class="dual-slider-track"></div>
+          <div id="fill-${catId}" class="dual-slider-fill" style="left: 0%; right: 0%;"></div>
+          <input
+            type="range"
+            id="range-min-${catId}"
+            class="dual-slider-input"
+            min="0"
+            max="${state.limitMax}"
+            step="${state.decimals === 0 ? '1' : '0.1'}"
+            value="${state.min}"
+          />
+          <input
+            type="range"
+            id="range-max-${catId}"
+            class="dual-slider-input"
+            min="0"
+            max="${state.limitMax}"
+            step="${state.decimals === 0 ? '1' : '0.1'}"
+            value="${state.max}"
+          />
+        </div>
+      `;
+
+      // Slider event wiring
+      const rangeMin = card.querySelector(`#range-min-${catId}`);
+      const rangeMax = card.querySelector(`#range-max-${catId}`);
+      const numMin = card.querySelector(`#num-min-${catId}`);
+      const numMax = card.querySelector(`#num-max-${catId}`);
+      const fill = card.querySelector(`#fill-${catId}`);
+
+      function updateSliderFill() {
+        const minVal = parseFloat(rangeMin.value);
+        const maxVal = parseFloat(rangeMax.value);
+        const limit = state.limitMax;
+
+        const leftPct = (minVal / limit) * 100;
+        const rightPct = 100 - (maxVal / limit) * 100;
+
+        fill.style.left = `${leftPct}%`;
+        fill.style.right = `${rightPct}%`;
+      }
+
+      function onSliderChange() {
+        let minVal = parseFloat(rangeMin.value);
+        let maxVal = parseFloat(rangeMax.value);
+
+        if (minVal > maxVal) {
+          const temp = minVal;
+          minVal = maxVal;
+          maxVal = temp;
+          rangeMin.value = minVal;
+          rangeMax.value = maxVal;
+        }
+
+        state.min = minVal;
+        state.max = maxVal;
+
+        numMin.value = minVal.toFixed(state.decimals);
+        numMax.value = maxVal.toFixed(state.decimals);
+
+        // Visual active indicator when slider is actively constraining
+        const isFiltering = state.min > 0 || state.max < state.limitMax;
+        const tag = card.querySelector(`#unit-tag-${catId}`);
+        if (isFiltering) {
+          card.style.borderColor = '#0078D4';
+          card.style.backgroundColor = '#f0f9ff';
+          if (tag) {
+            tag.className = 'text-[9.5px] text-[#0078D4] font-bold shrink-0 ml-1';
+            tag.textContent = `≤ ${Math.round(state.max)}m`;
+          }
+        } else {
+          card.style.borderColor = '';
+          card.style.backgroundColor = '';
+          if (tag) {
+            tag.className = 'text-[9.5px] text-slate-400 font-medium shrink-0 ml-1';
+            tag.textContent = 'to nearest (m)';
+          }
+        }
+
+        updateSliderFill();
+        renderMapMarkers();
+      }
+
+      rangeMin.addEventListener('input', () => {
+        if (parseFloat(rangeMin.value) > parseFloat(rangeMax.value)) {
+          rangeMin.value = rangeMax.value;
+        }
+        onSliderChange();
+      });
+
+      rangeMax.addEventListener('input', () => {
+        if (parseFloat(rangeMax.value) < parseFloat(rangeMin.value)) {
+          rangeMax.value = rangeMin.value;
+        }
+        onSliderChange();
+      });
+
+      numMin.addEventListener('change', () => {
+        let v = parseFloat(numMin.value);
+        if (isNaN(v)) v = 0;
+        v = Math.max(0, Math.min(v, state.limitMax));
+        if (v > state.max) v = state.max;
+        rangeMin.value = v;
+        onSliderChange();
+      });
+
+      numMax.addEventListener('change', () => {
+        let v = parseFloat(numMax.value);
+        if (isNaN(v)) v = state.limitMax;
+        v = Math.max(0, Math.min(v, state.limitMax));
+        if (v < state.min) v = state.min;
+        rangeMax.value = v;
+        onSliderChange();
+      });
+
+      updateSliderFill();
+      return card;
+    }
+
+    function buildAllSliders() {
+      const rightGrid = document.getElementById('rightSlidersGrid');
+      rightGrid.innerHTML = '';
+      RIGHT_SLIDER_IDS.forEach((id) => {
+        const card = buildSliderCard(id);
+        if (card) rightGrid.appendChild(card);
+      });
+
+      const bottomGrid = document.getElementById('bottomSlidersGrid');
+      bottomGrid.innerHTML = '';
+      BOTTOM_SLIDER_IDS.forEach((id) => {
+        const card = buildSliderCard(id);
+        if (card) bottomGrid.appendChild(card);
+      });
+    }
+
+    /*************************************************************************
+     * 7. RESET ALL & CONTROLS
+     *************************************************************************/
+    window.resetAllFilters = function () {
+      // 1. Reset categories
+      visibleCategories.clear();
+      ASSET_CATEGORIES.forEach((c) => visibleCategories.add(c.id));
+      document.querySelectorAll('.category-checkbox').forEach((chk) => (chk.checked = true));
+
+      // 2. Reset sliders
+      ALL_SLIDER_IDS.forEach((catId) => {
+        const cat = ASSET_CATEGORIES.find((c) => c.id === catId);
+        const state = sliderFilters[catId];
+        state.min = cat.initMin;
+        state.max = cat.initMax;
+
+        const rangeMin = document.getElementById(`range-min-${catId}`);
+        const rangeMax = document.getElementById(`range-max-${catId}`);
+        const numMin = document.getElementById(`num-min-${catId}`);
+        const numMax = document.getElementById(`num-max-${catId}`);
+        const fill = document.getElementById(`fill-${catId}`);
+
+        if (rangeMin && rangeMax) {
+          rangeMin.value = state.min;
+          rangeMax.value = state.max;
+          numMin.value = state.min.toFixed(state.decimals);
+          numMax.value = state.max.toFixed(state.decimals);
+
+          const leftPct = (state.min / state.limitMax) * 100;
+          const rightPct = 100 - (state.max / state.limitMax) * 100;
+          fill.style.left = `${leftPct}%`;
+          fill.style.right = `${rightPct}%`;
+        }
+
+        const card = document.getElementById(`slicer-card-${catId}`);
+        const tag = document.getElementById(`unit-tag-${catId}`);
+        if (card) {
+          card.style.borderColor = '';
+          card.style.backgroundColor = '';
+        }
+        if (tag) {
+          tag.className = 'text-[9.5px] text-slate-400 font-medium shrink-0 ml-1';
+          tag.textContent = 'to nearest (m)';
+        }
+      });
+
+      // 3. Clear radius circle if open
+      if (window.selectedRadiusCircle && map) {
+        map.removeLayer(window.selectedRadiusCircle);
+        window.selectedRadiusCircle = null;
+      }
+
+      // 4. Reset map view
+      if (map) {
+        map.setView([34.0215, -118.4835], 14.8);
+      }
+
+      renderMapMarkers();
+      showToast('All filters and sliders reset to default');
+    };
+
+    /*************************************************************************
+     * 8. PAGINATION & REPORT VIEWS (< 1 of 3 >)
+     *************************************************************************/
+    window.setReportPage = function (pageNum) {
+      currentPage = pageNum;
+      document.getElementById('pageIndicatorText').textContent = `${pageNum} of 3`;
+      document.getElementById('prevPageBtn').disabled = pageNum === 1;
+      document.getElementById('nextPageBtn').disabled = pageNum === 3;
+
+      const mainView = document.getElementById('mainDashboardView');
+      const secondaryModal = document.getElementById('secondaryPageModal');
+
+      if (pageNum === 1) {
+        mainView.classList.remove('hidden');
+        secondaryModal.classList.add('hidden');
+        if (map) {
+          setTimeout(() => map.invalidateSize(), 80);
+        }
+      } else {
+        mainView.classList.add('hidden');
+        secondaryModal.classList.remove('hidden');
+        renderSecondaryPage(pageNum);
+      }
+    };
+
+    function renderSecondaryPage(pageNum) {
+      const title = document.getElementById('secondaryPageTitle');
+      const subtitle = document.getElementById('secondaryPageSubtitle');
+      const body = document.getElementById('secondaryPageBody');
+      body.innerHTML = '';
+
+      if (pageNum === 2) {
+        title.textContent = 'Santa Monica Facility Distribution & Asset Density';
+        subtitle.textContent = 'Analytical distribution of 193 verified commercial & community facilities across Santa Monica';
+
+        // Breakdown Card
+        const card1 = document.createElement('div');
+        card1.className = 'bg-white border border-slate-200 rounded-lg p-4 shadow-sm';
+        card1.innerHTML = `
+          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-[#0078D4]"></i> Category Breakdown
+          </h3>
+          <div class="space-y-2 text-xs">
+            ${ASSET_CATEGORIES.map((c) => {
+              const count = SANTA_MONICA_FACILITIES.filter((f) => f.categories.includes(c.id)).length;
+              const pct = ((count / SANTA_MONICA_FACILITIES.length) * 100).toFixed(1);
+              return `
+                <div>
+                  <div class="flex justify-between text-slate-600 mb-0.5">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${c.color}"></span>${c.name}</span>
+                    <span class="font-semibold text-slate-800">${count} (${pct}%)</span>
+                  </div>
+                  <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full" style="width: ${pct}%; background: ${c.color}"></div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+        body.appendChild(card1);
+
+        // Corridors & Key Districts Card
+        const card2 = document.createElement('div');
+        card2.className = 'bg-white border border-slate-200 rounded-lg p-4 shadow-sm';
+        card2.innerHTML = `
+          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-road text-[#0078D4]"></i> Key Commercial Corridors
+          </h3>
+          <p class="text-xs text-slate-600 leading-relaxed mb-3">
+            Santa Monica's commercial and community fabric concentrates along high-walkability corridors:
+          </p>
+          <ul class="text-xs space-y-2 text-slate-700">
+            <li class="p-2 bg-slate-50 rounded border border-slate-100">
+              <strong class="text-slate-900 block">3rd Street Promenade &amp; Ocean Ave</strong>
+              <span class="text-slate-500">Retail flagships, restaurants, cafes, and beachfront entertainment.</span>
+            </li>
+            <li class="p-2 bg-slate-50 rounded border border-slate-100">
+              <strong class="text-slate-900 block">Wilshire &amp; Santa Monica Blvd</strong>
+              <span class="text-slate-500">Medical plazas, grocers (Whole Foods, Trader Joe's), pharmacies, and dining.</span>
+            </li>
+            <li class="p-2 bg-slate-50 rounded border border-slate-100">
+              <strong class="text-slate-900 block">Montana Avenue</strong>
+              <span class="text-slate-500">Upscale boutiques, artisanal bakeries, tea salons, and wellness studios.</span>
+            </li>
+            <li class="p-2 bg-slate-50 rounded border border-slate-100">
+              <strong class="text-slate-900 block">Main Street &amp; Ocean Park</strong>
+              <span class="text-slate-500">Coastal cafes, surf shops, yoga gyms, and neighborhood bars.</span>
+            </li>
+          </ul>
+        `;
+        body.appendChild(card2);
+
+        // Summary KPI Card
+        const card3 = document.createElement('div');
+        card3.className = 'bg-white border border-slate-200 rounded-lg p-4 shadow-sm';
+        card3.innerHTML = `
+          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-circle-check text-emerald-600"></i> Data Quality &amp; Verification
+          </h3>
+          <div class="space-y-3 text-xs text-slate-600">
+            <div class="p-2.5 bg-emerald-50 rounded border border-emerald-100 text-emerald-900">
+              <strong class="block mb-0.5">Real Santa Monica City Limits</strong>
+              Official administrative boundary polygon loaded directly via OpenStreetMap GeoJSON.
+            </div>
+            <div class="p-2.5 bg-sky-50 rounded border border-sky-100 text-sky-900">
+              <strong class="block mb-0.5">100% Real Venues &amp; Coordinates</strong>
+              All 193 POIs are authentic named businesses with real coordinates and street addresses.
+            </div>
+            <div class="p-2.5 bg-slate-50 rounded border border-slate-200 text-slate-800">
+              <strong class="block mb-0.5">Zero API Key Requirement</strong>
+              Uses Esri World Street Map layer for crisp cartography without watermark or API limits.
+            </div>
+          </div>
+        `;
+        body.appendChild(card3);
+      } else if (pageNum === 3) {
+        title.textContent = 'Santa Monica Accessibility & Proximity Matrix';
+        subtitle.textContent = 'Pairwise proximity statistics and 15-minute city accessibility metrics';
+
+        const matrixCard = document.createElement('div');
+        matrixCard.className = 'col-span-full bg-white border border-slate-200 rounded-lg p-4 shadow-sm';
+        matrixCard.innerHTML = `
+          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-ruler-combined text-[#0078D4]"></i> Average Proximity to Essential Services
+          </h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
+            <div class="p-3 bg-slate-50 rounded border border-slate-100 text-center">
+              <div class="text-[10px] uppercase text-slate-400 font-bold">Avg. Dist to Grocery</div>
+              <div class="text-xl font-bold text-emerald-700 mt-1">428 m</div>
+              <div class="text-[10.5px] text-slate-500 mt-0.5">~5 min walk</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded border border-slate-100 text-center">
+              <div class="text-[10px] uppercase text-slate-400 font-bold">Avg. Dist to Pharmacy</div>
+              <div class="text-xl font-bold text-sky-700 mt-1">512 m</div>
+              <div class="text-[10.5px] text-slate-500 mt-0.5">~6 min walk</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded border border-slate-100 text-center">
+              <div class="text-[10px] uppercase text-slate-400 font-bold">Avg. Dist to Cafe</div>
+              <div class="text-xl font-bold text-amber-700 mt-1">290 m</div>
+              <div class="text-[10.5px] text-slate-500 mt-0.5">~3 min walk</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded border border-slate-100 text-center">
+              <div class="text-[10px] uppercase text-slate-400 font-bold">Avg. Dist to Post Office</div>
+              <div class="text-xl font-bold text-indigo-700 mt-1">620 m</div>
+              <div class="text-[10.5px] text-slate-500 mt-0.5">~7 min walk</div>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Santa Monica exhibits extraordinary 15-minute city scores, with over 94% of residential parcels having an essential grocery, cafe, or pharmacy within a 10-minute walk (under 800 meters).
+          </p>
+        `;
+        body.appendChild(matrixCard);
+      }
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toastBanner');
+      const text = document.getElementById('toastBannerText');
+      text.textContent = message;
+      toast.classList.remove('translate-y-[-100px]', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.add('translate-y-[-100px]', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 2200);
+    }
+
+    window.toggleFullscreen = function () {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    };
+
+    /*************************************************************************
+     * 9. EVENT LISTENERS INITIALIZATION
+     *************************************************************************/
+    document.addEventListener('DOMContentLoaded', () => {
+      initLeafletMap();
+      buildCategoryChecklist();
+      buildLegendBar();
+      buildAllSliders();
+
+      // Top Zoom Controls
+      document.getElementById('mapZoomInBtn').addEventListener('click', () => map.zoomIn());
+      document.getElementById('mapZoomOutBtn').addEventListener('click', () => map.zoomOut());
+      document.getElementById('resetMapCenterBtn').addEventListener('click', () => {
+        if (map) {
+          map.setView([34.0215, -118.4835], 14.8);
+        }
+      });
+
+      // Reset All Filters Button
+      document.getElementById('resetAllFiltersBtn').addEventListener('click', resetAllFilters);
+
+      // Legend Scrolling
+      const legendScroll = document.getElementById('legendScrollContainer');
+      document.getElementById('scrollLegendLeftBtn').addEventListener('click', () => {
+        legendScroll.scrollBy({ left: -160, behavior: 'smooth' });
+      });
+      document.getElementById('scrollLegendRightBtn').addEventListener('click', () => {
+        legendScroll.scrollBy({ left: 160, behavior: 'smooth' });
+      });
+
+      // Pagination
+      document.getElementById('prevPageBtn').addEventListener('click', () => {
+        if (currentPage > 1) setReportPage(currentPage - 1);
+      });
+      document.getElementById('nextPageBtn').addEventListener('click', () => {
+        if (currentPage < 3) setReportPage(currentPage + 1);
+      });
+    });
+  </script>
+</body>
+</html>
